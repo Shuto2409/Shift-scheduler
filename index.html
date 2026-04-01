@@ -1,0 +1,1564 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<title>シフトスケジューラー</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Noto Sans JP',sans-serif;background:#eceff1;color:#263238;font-size:13px;-webkit-tap-highlight-color:transparent}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:#eceff1}
+::-webkit-scrollbar-thumb{background:#b0bec5;border-radius:4px}
+button,select,input,textarea{font-family:'Noto Sans JP',sans-serif}
+@keyframes pop{from{transform:scale(.93);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@media print{.no-print{display:none!important}body{overflow:visible}html,body{height:auto}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useMemo,useRef,useCallback,useEffect} = React;
+
+/* ─── CONSTANTS ─────────────────────────────────────── */
+const HS=6,HE=23,THRS=HE-HS;
+const SPH=4,SM=15,TSLOTS=THRS*SPH;
+// Desktop dims
+const D={SW:16,NW:160,TW:145,RH:28};
+// Mobile dims
+const M={SW:13,NW:72,TW:0,RH:34};
+
+const t2s=t=>{const[h,m]=t.split(':').map(Number);return(h-HS)*SPH+~~(m/SM);};
+const s2t=s=>{const m=HS*60+s*SM;return`${String(~~(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;};
+const slotH=(a,b)=>+((b-a)*SM/60).toFixed(2);
+const mon0=d=>{const x=new Date(d);x.setHours(0,0,0,0);const w=x.getDay();x.setDate(x.getDate()-(w===0?6:w-1));return x;};
+const wk=m=>Array.from({length:7},(_,i)=>{const d=new Date(m);d.setDate(m.getDate()+i);return d;});
+const dk=d=>d.toISOString().split('T')[0];
+const JA=['月','火','水','木','金','土','日'];
+const TOPTS=Array.from({length:TSLOTS+1},(_,i)=>s2t(i));
+const PRESET_COLORS=['#e65100','#1565c0','#6a1b9a','#2e7d32','#00695c','#c62828','#4527a0','#00838f','#f57f17','#37474f'];
+
+/* ─── DEFAULT DATA ─────────────────────────────────── */
+const DEF_POS=[
+  {id:'counter',name:'カウンター',short:'カウ',color:'#e65100'},
+  {id:'kitchen',name:'キッチン',  short:'キッ',color:'#1565c0'},
+  {id:'drink',  name:'ドリンク',  short:'ドリ',color:'#6a1b9a'},
+  {id:'hall',   name:'ホール',    short:'ホール',color:'#2e7d32'},
+  {id:'clean',  name:'クリーナー',short:'クリ',color:'#00695c'},
+];
+const DEF_STAFF=[
+  {id:'1', name:'田中 太郎',  type:'P',  pid:'kitchen'},
+  {id:'2', name:'鈴木 花子',  type:'P',  pid:'counter'},
+  {id:'3', name:'山田 一郎',  type:'社', pid:'kitchen'},
+  {id:'4', name:'佐藤 美咲',  type:'P',  pid:'hall'},
+  {id:'5', name:'伊藤 健二',  type:'P',  pid:'drink'},
+  {id:'6', name:'渡辺 優子',  type:'P',  pid:'counter'},
+  {id:'7', name:'小林 大輔',  type:'P',  pid:'clean'},
+  {id:'8', name:'加藤さゆり', type:'P',  pid:'hall'},
+  {id:'9', name:'中村 翔太',  type:'社', pid:'kitchen'},
+  {id:'10',name:'林  ひろみ', type:'P',  pid:'drink'},
+];
+
+/* ─── FIREBASE CONFIG ───────────────────────────────── */
+const CFG_KEY='shift_fb_cfg';
+const NTL_KEY='shift_ntl_cfg';
+const loadCfg=()=>{try{const s=localStorage.getItem(CFG_KEY);return s?JSON.parse(s):null;}catch{return null;}};
+const saveCfg=cfg=>localStorage.setItem(CFG_KEY,JSON.stringify(cfg));
+const clearCfg=()=>localStorage.removeItem(CFG_KEY);
+const loadNtl=()=>{try{const s=localStorage.getItem(NTL_KEY);return s?JSON.parse(s):null;}catch{return null;}};
+const saveNtl=cfg=>localStorage.setItem(NTL_KEY,JSON.stringify(cfg));
+
+async function deployToNetlify(token, siteId, onProgress){
+  // ① JSZip チェック
+  if(typeof JSZip === 'undefined') throw new Error('JSZipが読み込まれていません。インターネット接続を確認してください。');
+
+  onProgress('HTMLを取得中...');
+  const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+
+  onProgress('ZIPを作成中...');
+  const zip = new JSZip();
+  zip.file('index.html', html);
+  const blob = await zip.generateAsync({type:'blob', compression:'DEFLATE'});
+  onProgress(`ZIP完成 (${(blob.size/1024).toFixed(0)}KB) — Netlifyに接続中...`);
+
+  // ② サイト作成
+  let sid = siteId;
+  if(!sid){
+    onProgress('新しいサイトを作成中...');
+    let createRes;
+    try{
+      createRes = await fetch('https://api.netlify.com/api/v1/sites',{
+        method:'POST',
+        headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
+        body: JSON.stringify({name:'shift-scheduler-'+Math.random().toString(36).slice(2,8)}),
+      });
+    }catch(e){ throw new Error(`Netlify APIへの接続失敗: ${e.message} — トークンかネットワークを確認してください`); }
+    if(!createRes.ok){
+      const e=await createRes.json().catch(()=>({}));
+      throw new Error(`サイト作成失敗 (${createRes.status}): ${e.message||JSON.stringify(e)}`);
+    }
+    const site = await createRes.json();
+    sid = site.id;
+    saveNtl({token, siteId:sid, url:site.ssl_url||site.url||''});
+    onProgress(`サイト作成完了 → デプロイ中...`);
+  }
+
+  // ③ デプロイ
+  let deployRes;
+  try{
+    deployRes = await fetch(`https://api.netlify.com/api/v1/sites/${sid}/deploys`,{
+      method:'POST',
+      headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/zip'},
+      body: blob,
+    });
+  }catch(e){ throw new Error(`デプロイAPIへの接続失敗: ${e.message}`); }
+
+  if(!deployRes.ok){
+    const e=await deployRes.json().catch(()=>({}));
+    throw new Error(`デプロイ失敗 (${deployRes.status}): ${e.message||JSON.stringify(e)}`);
+  }
+  const data = await deployRes.json();
+  saveNtl({token, siteId:sid, url:data.deploy_ssl_url||data.url||''});
+  return data;
+}
+
+let _fbApp=null;
+function initFB(cfg){
+  try{
+    if(!firebase.apps.length) _fbApp=firebase.initializeApp(cfg);
+    else _fbApp=firebase.app();
+    return firebase.database();
+  }catch(e){console.error('FB init error',e);return null;}
+}
+
+/* ─── SETUP SCREEN ──────────────────────────────────── */
+function SetupScreen({onDone}){
+  const [step,setStep]=useState(1);
+  const [raw,setRaw]=useState('');
+  const [err,setErr]=useState('');
+  const [testing,setTesting]=useState(false);
+
+  const tryConnect=async()=>{
+    setErr('');setTesting(true);
+    try{
+      let cfg;
+      try{
+        // まずそのままJSONとして試す
+        cfg=JSON.parse(raw.trim());
+      }catch{
+        try{
+          // JS オブジェクトリテラル形式（const firebaseConfig = { ... } など）を安全に評価
+          let cleaned=raw.trim();
+          // "const firebaseConfig = " などの前置きを除去
+          cleaned=cleaned.replace(/^.*?firebaseConfig\s*=\s*/,'');
+          // 末尾のセミコロンや不要文字を除去
+          cleaned=cleaned.replace(/;?\s*$/, '');
+          // Function コンストラクタで安全に評価
+          cfg=Function('"use strict";return ('+cleaned+')')();
+        }catch(e2){
+          throw new Error('設定の読み取りに失敗しました。Firebase コンソールからコピーした firebaseConfig をそのまま貼り付けてください。');
+        }
+      }
+      if(!cfg||typeof cfg!=='object') throw new Error('設定が正しく読み取れませんでした');
+      if(!cfg.apiKey)       throw new Error('apiKey が見つかりません');
+      if(!cfg.databaseURL)  throw new Error('databaseURL が見つかりません。Realtime Database を有効にしてください。');
+      const db=initFB(cfg);
+      if(!db) throw new Error('Firebase の初期化に失敗しました');
+      await db.ref('/.info/connected').once('value');
+      saveCfg(cfg);
+      setTesting(false);
+      onDone(cfg);
+    }catch(e){setErr(e.message||'接続に失敗しました');setTesting(false);}
+  };
+
+  const S={
+    wrap:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100vh',background:'#f0f4ff',padding:20},
+    card:{background:'#fff',borderRadius:16,padding:32,maxWidth:520,width:'100%',boxShadow:'0 8px 40px rgba(26,35,126,.12)'},
+    h1:{fontSize:22,fontWeight:900,color:'#1a237e',marginBottom:6},
+    sub:{fontSize:13,color:'#78909c',marginBottom:24},
+    step:{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:9,marginBottom:8,border:'1px solid'},
+    num:{width:26,height:26,borderRadius:'50%',background:'#1a237e',color:'#fff',fontWeight:800,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0},
+    code:{background:'#f5f5f5',borderRadius:6,padding:'10px 12px',fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:'#263238',marginTop:8,wordBreak:'break-all'},
+    ta:{width:'100%',minHeight:130,padding:'10px 12px',border:'1.5px solid #9fa8da',borderRadius:9,fontSize:12,fontFamily:"'JetBrains Mono',monospace",outline:'none',resize:'vertical',color:'#263238',marginTop:8},
+  };
+
+  return(
+    <div style={S.wrap}>
+      <div style={S.card}>
+        <div style={{textAlign:'center',marginBottom:24}}>
+          <div style={{fontSize:40,marginBottom:8}}>🔥</div>
+          <div style={S.h1}>Firebase 連携設定</div>
+          <div style={S.sub}>初回のみ必要です。一度設定すれば次回から自動で接続されます。</div>
+        </div>
+
+        {/* Steps */}
+        <div style={{marginBottom:20}}>
+          {[
+            ['1','Firebase Console を開く','https://console.firebase.google.com にアクセスし「プロジェクトを作成」をクリック'],
+            ['2','Realtime Database を有効化','左メニュー → Realtime Database → 「データベースを作成」→ テストモード で作成'],
+            ['3','ルールを設定','Realtime Database → ルール タブを開き以下を貼り付けて「公開」'],
+            ['4','ウェブアプリを登録','プロジェクト設定（歯車）→「アプリを追加」→ ウェブ（</>）→ アプリのニックネームを入力して登録'],
+            ['5','設定をコピーして貼り付け','firebaseConfig の中身をコピーして下のテキストエリアに貼り付け'],
+          ].map(([n,title,desc])=>(
+            <div key={n} style={{...S.step,borderColor:n==='3'?'#ffcdd2':'#e8eaf6',background:n==='3'?'#fff5f5':'#f8f9ff'}}>
+              <div style={S.num}>{n}</div>
+              <div>
+                <div style={{fontWeight:700,fontSize:13,color:'#1a237e'}}>{title}</div>
+                <div style={{fontSize:11,color:'#78909c',marginTop:2}}>{desc}</div>
+                {n==='3'&&<div style={S.code}>{`{\n  "rules": {\n    ".read": true,\n    ".write": true\n  }\n}`}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{fontSize:11,fontWeight:700,color:'#78909c',marginBottom:4}}>firebaseConfig を貼り付け（JSON または Firebase のコードスニペットごと）</div>
+        <textarea style={S.ta} value={raw} onChange={e=>setRaw(e.target.value)}
+          placeholder={`{\n  "apiKey": "AIza...",\n  "authDomain": "...",\n  "databaseURL": "https://...-default-rtdb.firebaseio.com",\n  "projectId": "...",\n  ...\n}`}/>
+
+        {err&&<div style={{background:'#ffebee',color:'#c62828',borderRadius:8,padding:'9px 12px',fontSize:12,fontWeight:600,marginTop:10}}>⚠️ {err}</div>}
+
+        <button onClick={tryConnect} disabled={!raw.trim()||testing} style={{
+          width:'100%',marginTop:16,padding:14,background:raw.trim()&&!testing?'#1a237e':'#b0bec5',
+          color:'#fff',border:'none',borderRadius:9,fontWeight:800,fontSize:15,cursor:raw.trim()&&!testing?'pointer':'default',
+        }}>
+          {testing?'🔄 接続中...':'🚀 接続してデータを保存する'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── HOOKS ────────────────────────────────────────── */
+function useIsMobile(){
+  const [mb,setMb]=useState(()=>window.innerWidth<768);
+  useEffect(()=>{
+    const h=()=>setMb(window.innerWidth<768);
+    window.addEventListener('resize',h);return()=>window.removeEventListener('resize',h);
+  },[]);
+  return mb;
+}
+
+/* ══════════════════════════════ APP ══════════════════════════════ */
+function App(){
+  const isMb=useIsMobile();
+  const [screen,setScreen]=useState('gantt');
+  const [monday,setMon]   =useState(mon0(new Date()));
+  const [day,   setDay]   =useState(()=>{const w=new Date().getDay();return w===0?6:w-1;});
+  const [positions,setPos]=useState(DEF_POS);
+  const [staff, setStaff] =useState(DEF_STAFF);
+  const [shifts,setShifts]=useState({});
+  const [prefs, setPrefs] =useState({});
+  const [req,   setReq]   =useState({counter:2,kitchen:3,drink:1,hall:2,clean:1});
+  const [types, setTypes] =useState(['P','社','バ','AM','PM']);
+  const [bizHours,setBiz] =useState({
+    // key: 0-6 (月〜日), value: {open:'09:00', close:'22:00', closed:false}
+    0:{open:'09:00',close:'22:00',closed:false},
+    1:{open:'09:00',close:'22:00',closed:false},
+    2:{open:'09:00',close:'22:00',closed:false},
+    3:{open:'09:00',close:'22:00',closed:false},
+    4:{open:'09:00',close:'22:00',closed:false},
+    5:{open:'09:00',close:'22:00',closed:false},
+    6:{open:'09:00',close:'22:00',closed:false},
+  });
+  const [modal, setModal] =useState(null);
+  const dragR=useRef(null);
+  const [drag, setDrag]   =useState(null);
+
+  /* ── Firebase state ── */
+  const [fbCfg,  setFbCfg] =useState(loadCfg);
+  const [dbReady,setDbReady]=useState(false);
+  const [syncing,setSyncing]=useState(false);
+  const [savedAt,setSavedAt]=useState(null);
+  const [syncErr,setSyncErr]=useState(false);
+  const dbRef    =useRef(null);
+  const saveTimer=useRef(null);
+  const loading  =useRef(false);
+
+  /* ── Netlify deploy state ── */
+  const [ntlModal,setNtlModal]=useState(false);
+
+  /* ── Firebase init + initial load ── */
+  useEffect(()=>{
+    if(!fbCfg) return;
+    const db=initFB(fbCfg);
+    if(!db) return;
+    dbRef.current=db.ref('/shiftapp');
+    loading.current=true;
+    dbRef.current.once('value',snap=>{
+      const d=snap.val();
+      if(d){
+        if(Array.isArray(d.positions)&&d.positions.length) setPos(d.positions);
+        if(Array.isArray(d.staff)    &&d.staff.length)     setStaff(d.staff);
+        if(d.shifts) setShifts(d.shifts);
+        if(d.prefs)  setPrefs(d.prefs);
+        if(d.req)    setReq(d.req);
+        if(d.bizHours) setBiz(d.bizHours);
+        if(Array.isArray(d.types)&&d.types.length) setTypes(d.types);
+      }
+      loading.current=false;
+      setDbReady(true);
+    });
+  },[fbCfg]);
+
+  /* ── Auto-save to Firebase (debounced 1.5s) ── */
+  useEffect(()=>{
+    if(!dbReady||loading.current||!dbRef.current) return;
+    clearTimeout(saveTimer.current);
+    setSyncing(true);setSyncErr(false);
+    saveTimer.current=setTimeout(()=>{
+      dbRef.current.set({positions,staff,shifts,prefs,req,bizHours,types})
+        .then(()=>{setSyncing(false);setSavedAt(new Date());})
+        .catch(()=>{setSyncing(false);setSyncErr(true);});
+    },1500);
+  },[positions,staff,shifts,prefs,req,bizHours,types,dbReady]);
+
+  const weeks=useMemo(()=>wk(monday),[monday]);
+  const sDk  =dk(weeks[day]);
+  const posOf=id=>positions.find(p=>p.id===id)||{id:'?',name:'?',short:'?',color:'#90a4ae'};
+
+  const counts=useMemo(()=>{
+    const c=Array.from({length:TSLOTS},()=>{const o={_:0};positions.forEach(p=>o[p.id]=0);return o;});
+    staff.forEach(s=>{const sh=shifts[`${s.id}-${sDk}`];if(!sh)return;
+      for(let i=sh.s;i<sh.e&&i<TSLOTS;i++){if(c[i][sh.pid]!==undefined)c[i][sh.pid]++;c[i]._++;}});
+    return c;
+  },[shifts,staff,sDk,positions]);
+
+  const hCounts=useMemo(()=>Array.from({length:THRS},(_,hi)=>{
+    const b=hi*SPH,o={_:0};positions.forEach(p=>o[p.id]=0);
+    for(let i=b;i<b+SPH&&i<TSLOTS;i++){
+      positions.forEach(p=>{if((counts[i][p.id]||0)>o[p.id])o[p.id]=counts[i][p.id]||0;});
+      if(counts[i]._>o._)o._=counts[i]._;
+    }
+    return o;
+  }),[counts,positions]);
+
+  /* ── drag / touch ── */
+  useEffect(()=>{
+    const up=()=>{dragR.current=null;setDrag(null);};
+    window.addEventListener('mouseup',up);window.addEventListener('touchend',up);
+    return()=>{window.removeEventListener('mouseup',up);window.removeEventListener('touchend',up);};
+  },[]);
+
+  const dims=isMb?M:D;
+
+  const slotFromX=(x,el)=>{
+    const rect=el.getBoundingClientRect();
+    return Math.max(0,Math.min(TSLOTS-1,~~((x-rect.left)/dims.SW)));
+  };
+
+  const onMD=useCallback((sid,clientX,el)=>{
+    const sh=shifts[`${sid}-${sDk}`];
+    const slot=slotFromX(clientX,el);
+    if(sh&&slot>=sh.s&&slot<sh.e)return false;
+    dragR.current={sid,s0:slot,s1:slot};setDrag({sid,s0:slot,s1:slot});return true;
+  },[shifts,sDk,dims]);
+
+  const onMM=useCallback((sid,clientX,el)=>{
+    if(!dragR.current||dragR.current.sid!==sid)return;
+    const slot=slotFromX(clientX,el);
+    if(dragR.current.s1===slot)return;
+    dragR.current.s1=slot;setDrag(d=>d?{...d,s1:slot}:null);
+  },[dims]);
+
+  const onMU=useCallback((sid)=>{
+    const dr=dragR.current;
+    if(!dr||dr.sid!==sid){dragR.current=null;setDrag(null);return;}
+    const s0=Math.min(dr.s0,dr.s1),e0=Math.max(dr.s0,dr.s1)+1;
+    dragR.current=null;setDrag(null);
+    if(e0-s0>=1){
+      const defPid=staff.find(x=>x.id===sid)?.pid||positions[0]?.id;
+      setModal({type:'add',sid,s:s0,e:e0,pid:defPid,brk:0,dk:sDk});
+    }
+  },[sDk,staff,positions]);
+
+  /* mobile tap on empty row → open modal */
+  const onTap=useCallback((sid)=>{
+    const sh=shifts[`${sid}-${sDk}`];
+    if(sh){setModal({type:'edit',sid,s:sh.s,e:sh.e,pid:sh.pid,brk:sh.brk||0,dk:sDk});return;}
+    const defPid=staff.find(x=>x.id===sid)?.pid||positions[0]?.id;
+    setModal({type:'add',sid,s:t2s('10:00'),e:t2s('18:00'),pid:defPid,brk:0,dk:sDk});
+  },[shifts,sDk,staff,positions]);
+
+  const save=()=>{
+    if(!modal)return;
+    if(modal.e<=modal.s){alert('終了は開始より後にしてください');return;}
+    setShifts(p=>({...p,[`${modal.sid}-${modal.dk}`]:{s:modal.s,e:modal.e,pid:modal.pid,brk:modal.brk||0}}));
+    setModal(null);
+  };
+  const del=()=>{
+    if(!modal)return;
+    setShifts(p=>{const n={...p};delete n[`${modal.sid}-${modal.dk}`];return n;});
+    setModal(null);
+  };
+
+  const exportCSV=()=>{
+    const hdr=['スタッフ','区分','ポジション','出勤','退勤','日計(h)','休憩(分)'];
+    const rows=staff.map(s=>{const sh=shifts[`${s.id}-${sDk}`];
+      return[s.name,s.type,sh?posOf(sh.pid).name:'',sh?s2t(sh.s):'',sh?s2t(sh.e):'',sh?slotH(sh.s,sh.e).toFixed(1):'',sh?sh.brk:''];
+    });
+    const csv=[hdr,...rows].map(r=>r.join(',')).join('\n');
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv'}));
+    a.download=`シフト_${sDk}.csv`;a.click();
+  };
+
+  const shared={day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizHours,modal,setModal,drag,onMD,onMM,onMU,onTap,hCounts,posOf,monday,save,del,dims,isMb};
+
+  /* ── Not configured yet → show setup ── */
+  if(!fbCfg) return <SetupScreen onDone={cfg=>{setFbCfg(cfg);setDbReady(false);loading.current=false;}}/>;
+
+  /* ── Sync badge ── */
+  const syncBadge=fbCfg?(
+    syncing ? <span style={{fontSize:10,color:'rgba(255,255,255,.7)',display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
+        <span style={{width:7,height:7,borderRadius:'50%',background:'#ffca28',display:'inline-block',animation:'pulse 1s infinite'}}/>保存中…</span>
+    : syncErr ? <span style={{fontSize:10,color:'#ff8a80',display:'flex',alignItems:'center',gap:4,flexShrink:0}}>⚠ 保存失敗</span>
+    : savedAt ? <span style={{fontSize:10,color:'rgba(255,255,255,.55)',display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
+        <span style={{width:7,height:7,borderRadius:'50%',background:'#69f0ae',display:'inline-block'}}/>保存済</span>
+    : null
+  ):null;
+
+  /* ─────────── RENDER ─────────── */
+  return(
+    <div style={{display:'flex',flexDirection:'column',height:'100vh',overflow:'hidden',background:'#eceff1'}}>
+    <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
+
+      {/* ── HEADER ── */}
+      <div className="no-print" style={{
+        background:'linear-gradient(90deg,#1a237e,#283593)',
+        height:isMb?50:48,display:'flex',alignItems:'center',gap:8,
+        padding:isMb?'0 12px':'0 14px',flexShrink:0,
+        boxShadow:'0 2px 8px rgba(0,0,0,.3)',
+      }}>
+        <div style={{background:'#e53935',color:'#fff',width:30,height:30,borderRadius:7,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,fontSize:14,flexShrink:0}}>S</div>
+        {!isMb&&<span style={{color:'#fff',fontWeight:800,fontSize:16}}>シフトスケジューラー</span>}
+
+        {/* screen toggle — desktop only (mobile uses bottom nav) */}
+        {!isMb&&(
+          <div style={{marginLeft:12,display:'flex',gap:2,background:'rgba(0,0,0,.25)',borderRadius:7,padding:2}}>
+            {[['gantt','📊 シフト表'],['admin','⚙️ 管理画面']].map(([id,label])=>(
+              <button key={id} onClick={()=>setScreen(id)} style={{padding:'4px 13px',border:'none',borderRadius:5,cursor:'pointer',fontSize:12,fontWeight:700,
+                background:screen===id?'#fff':'transparent',color:screen===id?'#1a237e':'rgba(255,255,255,.7)'}}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {isMb&&<div style={{marginLeft:4,flexShrink:0}}>{syncBadge}</div>}
+
+        {/* week nav */}
+        <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:isMb?4:6}}>
+          <HBtn onClick={()=>setMon(m=>{const d=new Date(m);d.setDate(d.getDate()-7);return d;})}>‹</HBtn>
+          <span style={{color:'#fff',fontSize:isMb?11:12,fontFamily:"'JetBrains Mono',monospace",minWidth:isMb?100:130,textAlign:'center',letterSpacing:'-.01em'}}>
+            {weeks[0].getMonth()+1}/{weeks[0].getDate()}〜{weeks[6].getMonth()+1}/{weeks[6].getDate()}
+          </span>
+          <HBtn onClick={()=>setMon(m=>{const d=new Date(m);d.setDate(d.getDate()+7);return d;})}>›</HBtn>
+        </div>
+
+        {!isMb&&<>
+          <div style={{width:1,height:22,background:'rgba(255,255,255,.2)',margin:'0 4px'}}/>
+          <HBtn onClick={exportCSV}>📥 CSV</HBtn>
+          <HBtn onClick={()=>window.print()}>🖨️ 印刷</HBtn>
+          <div style={{width:1,height:22,background:'rgba(255,255,255,.2)',margin:'0 4px'}}/>
+          {syncBadge}
+          <HBtn onClick={()=>setNtlModal(true)} style={{background:'rgba(0,200,100,.2)',border:'1px solid rgba(0,200,100,.4)'}}>🚀 Deploy</HBtn>
+          <HBtn onClick={()=>{if(confirm('Firebase連携を解除しますか？（データは削除されません）')){clearCfg();setFbCfg(null);setDbReady(false);}}}>⚙ DB設定</HBtn>
+        </>}
+      </div>
+
+      {/* ── CONTENT ── */}
+      <div style={{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+        {screen==='gantt'
+          ? <GanttScreen {...shared} exportCSV={exportCSV}/>
+          : <AdminScreen {...{positions,setPos,staff,setStaff,prefs,setPrefs,req,setReq,shifts,setShifts,posOf,isMb,bizHours,setBiz,types,setTypes}}/>
+        }
+      </div>
+
+      {/* ── BOTTOM NAV (mobile only) ── */}
+      {isMb&&(
+        <div className="no-print" style={{
+          display:'flex',background:'#fff',
+          borderTop:'1px solid #e0e0e0',
+          flexShrink:0,
+          boxShadow:'0 -2px 12px rgba(0,0,0,.08)',
+          paddingBottom:'env(safe-area-inset-bottom)',
+        }}>
+          {[['gantt','📊','シフト表'],['admin','⚙️','管理'],['deploy','🚀','Deploy']].map(([id,icon,label])=>(
+            <button key={id} onClick={()=>id==='deploy'?setNtlModal(true):setScreen(id)} style={{
+              flex:1,padding:'10px 0 8px',border:'none',background:'none',cursor:'pointer',
+              display:'flex',flexDirection:'column',alignItems:'center',gap:2,
+              color:id==='deploy'?'#2e7d32':screen===id?'#1a237e':'#90a4ae',
+              borderTop:screen===id&&id!=='deploy'?'2.5px solid #1a237e':'2.5px solid transparent',
+              transition:'color .12s',
+            }}>
+              <span style={{fontSize:20,lineHeight:1}}>{icon}</span>
+              <span style={{fontSize:10,fontWeight:screen===id?800:600}}>{label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── MODAL ── */}
+      {modal&&<ShiftModal modal={modal} setModal={setModal} positions={positions} staff={staff} save={save} del={del} isMb={isMb}/>}
+      {ntlModal&&<DeployModal onClose={()=>setNtlModal(false)} isMb={isMb}/>}
+    </div>
+  );
+}
+
+/* ══════════════════════ GANTT SCREEN ══════════════════════ */
+function GanttScreen({day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizHours,modal,setModal,drag,onMD,onMM,onMU,onTap,hCounts,posOf,monday,save,del,dims,isMb,exportCSV}){
+  const {SW,NW,TW,RH}=dims;
+  const HW=SW*SPH;
+  const totW=NW+TSLOTS*SW+(isMb?0:TW);
+
+  // current day-of-week biz hours (0=月...6=日)
+  const biz=bizHours?.[day]||{open:'00:00',close:'23:59',closed:false};
+  const bizOpen =biz.closed?null:t2s(biz.open);
+  const bizClose=biz.closed?null:t2s(biz.close);
+
+  return(
+    <>
+      {/* ── Day tabs ── */}
+      <div className="no-print" style={{
+        background:'#fff',borderBottom:'1px solid #cfd8dc',
+        display:'flex',alignItems:'stretch',
+        padding:isMb?'0 2px':'0 8px',
+        flexShrink:0,overflowX:'auto',
+        boxShadow:'0 1px 3px rgba(0,0,0,.06)',
+        WebkitOverflowScrolling:'touch',
+      }}>
+        {weeks.map((d,i)=>{
+          const hasSh=staff.some(s=>shifts[`${s.id}-${dk(d)}`]);
+          const sat=i===5,sun=i===6,act=day===i;
+          return(
+            <button key={i} onClick={()=>setDay(i)} style={{
+              padding:isMb?'6px 10px':'6px 14px',border:'none',background:'none',cursor:'pointer',
+              fontWeight:act?800:500,fontSize:isMb?12:13,
+              color:act?'#1a237e':sat?'#1565c0':sun?'#c62828':'#546e7a',
+              borderBottom:act?'3px solid #1a237e':'3px solid transparent',
+              display:'flex',flexDirection:'column',alignItems:'center',gap:1,
+              position:'relative',flexShrink:0,
+            }}>
+              <span>{JA[i]}</span>
+              <span style={{fontSize:9,fontFamily:"'JetBrains Mono',monospace"}}>{d.getMonth()+1}/{d.getDate()}</span>
+              {hasSh&&<span style={{position:'absolute',top:4,right:4,width:5,height:5,borderRadius:'50%',background:'#e53935'}}/>}
+            </button>
+          );
+        })}
+        {/* mobile actions */}
+        {isMb&&<div style={{marginLeft:'auto',display:'flex',alignItems:'center',padding:'0 8px',gap:6,flexShrink:0}}>
+          <button onClick={exportCSV} style={{padding:'5px 9px',background:'#e3f2fd',color:'#1565c0',border:'none',borderRadius:6,fontSize:11,fontWeight:700,cursor:'pointer'}}>CSV</button>
+        </div>}
+        {/* desktop legend */}
+        {!isMb&&<div style={{marginLeft:'auto',display:'flex',alignItems:'center',padding:'0 12px',gap:10,flexShrink:0}}>
+          {positions.map(p=>(
+            <span key={p.id} style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#78909c'}}>
+              <span style={{width:9,height:9,borderRadius:2,background:p.color,display:'inline-block',flexShrink:0}}/>
+              {p.name}
+            </span>
+          ))}
+        </div>}
+      </div>
+
+      {/* ── Gantt scroll ── */}
+      <div style={{flex:1,overflowX:'auto',overflowY:'auto',WebkitOverflowScrolling:'touch'}}>
+        <div style={{minWidth:totW}}>
+
+          {/* ── Time header + Position status (sticky) ── */}
+          <div style={{position:'sticky',top:0,zIndex:20}}>
+
+            {/* Time ruler */}
+            <div style={{display:'flex',background:'#263238'}}>
+              <div style={{width:NW,flexShrink:0,borderRight:'1px solid #37474f',padding:'4px 6px',color:'#78909c',fontSize:10,fontWeight:700,display:'flex',alignItems:'center'}}>
+                {isMb?'名前':'スタッフ'}
+              </div>
+              <div style={{width:TSLOTS*SW,flexShrink:0,position:'relative',height:isMb?24:30}}>
+                {Array.from({length:THRS+1},(_,i)=>(
+                  <div key={i} style={{position:'absolute',left:i*HW,top:0,bottom:0,borderLeft:i===0?'none':'1px solid #455a64',display:'flex',alignItems:'center',paddingLeft:2}}>
+                    {i<THRS&&<span style={{color:'#b0bec5',fontSize:isMb?9:11,fontFamily:"'JetBrains Mono',monospace"}}>{String(HS+i).padStart(2,'0')}</span>}
+                  </div>
+                ))}
+                {!isMb&&Array.from({length:THRS},(_,hi)=>(
+                  <div key={hi} style={{position:'absolute',left:hi*HW+HW/2,top:'55%',bottom:0,borderLeft:'1px solid #37474f'}}/>
+                ))}
+              </div>
+              {!isMb&&<div style={{width:TW,flexShrink:0,borderLeft:'1px solid #37474f',padding:'4px 8px',color:'#78909c',fontSize:11,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+                <span>出勤</span><span style={{color:'#455a64'}}>〜</span><span>退勤</span><span style={{color:'#455a64'}}>|</span><span>時間</span>
+              </div>}
+            </div>
+
+            {/* ── Position status bars ── */}
+            <div style={{background:'#1c2a30',borderBottom:'2px solid #37474f'}}>
+              {positions.map((p,pi)=>{
+                const reqN=req[p.id]||0;
+                return(
+                  <div key={p.id} style={{display:'flex',height:isMb?14:16,borderTop:pi===0?'none':'1px solid rgba(255,255,255,.05)'}}>
+                    {/* label */}
+                    <div style={{width:NW,flexShrink:0,borderRight:'1px solid #37474f',display:'flex',alignItems:'center',gap:5,padding:'0 6px',overflow:'hidden'}}>
+                      <div style={{width:7,height:7,borderRadius:2,background:p.color,flexShrink:0}}/>
+                      <span style={{fontSize:isMb?8:9,fontWeight:700,color:'#b0bec5',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{isMb?p.short:p.name}</span>
+                      <span style={{fontSize:8,color:'#546e7a',marginLeft:'auto',flexShrink:0,fontFamily:"'JetBrains Mono',monospace"}}>/{reqN}</span>
+                    </div>
+                    {/* per-hour cells */}
+                    <div style={{width:TSLOTS*SW,flexShrink:0,position:'relative',overflow:'hidden'}}>
+                      {Array.from({length:THRS},(_,hi)=>{
+                        const c=hCounts[hi]?.[p.id]||0;
+                        const ok=reqN===0||(c>=reqN);
+                        const warn=reqN>0&&c>0&&c<reqN;
+                        const miss=reqN>0&&c===0;
+                        // check if this hour is outside biz hours
+                        const slotStart=hi*SPH;
+                        const outsideBiz=biz.closed||(bizOpen!==null&&(slotStart+SPH<=bizOpen||slotStart>=bizClose));
+                        const bg=outsideBiz?'rgba(40,50,55,.45)':miss?'rgba(198,40,40,.55)':warn?'rgba(245,124,0,.5)':c>0?p.color+'55':'transparent';
+                        const textCol=miss?'#ff8a80':warn?'#ffcc80':c>0?p.color:'transparent';
+                        return(
+                          <div key={hi} style={{
+                            position:'absolute',left:hi*HW,top:0,width:HW,height:'100%',
+                            background:outsideBiz?'repeating-linear-gradient(135deg,rgba(55,71,79,.25) 0px,rgba(55,71,79,.25) 2px,transparent 2px,transparent 6px)':bg,
+                            borderLeft:`1px solid rgba(255,255,255,.07)`,
+                            display:'flex',alignItems:'center',justifyContent:'center',
+                            transition:'background .2s',
+                          }}>
+                            {!outsideBiz&&c>0&&<span style={{fontSize:8,fontWeight:800,color:textCol,fontFamily:"'JetBrains Mono',monospace",lineHeight:1}}>{c}</span>}
+                            {!outsideBiz&&miss&&reqN>0&&<span style={{fontSize:7,fontWeight:800,color:'#ff8a80',lineHeight:1}}>✕</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {!isMb&&<div style={{width:TW,flexShrink:0,borderLeft:'1px solid #37474f',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      {(() => {
+                        const tot=staff.filter(s=>{const x=shifts[`${s.id}-${sDk}`];return x&&x.pid===p.id;}).length;
+                        const ok=reqN===0||tot>=reqN;
+                        return <span style={{fontSize:9,fontWeight:800,color:ok?(tot>0?p.color:'#546e7a'):'#ff5252',fontFamily:"'JetBrains Mono',monospace"}}>
+                          {tot>0?`${tot}名`:reqN>0?'0':'—'}{reqN>0&&` / ${reqN}`}
+                        </span>;
+                      })()}
+                    </div>}
+                  </div>
+                );
+              })}
+              {/* total row */}
+              <div style={{display:'flex',height:isMb?14:16,borderTop:'1px solid rgba(255,255,255,.12)',background:'rgba(0,0,0,.2)'}}>
+                <div style={{width:NW,flexShrink:0,borderRight:'1px solid #37474f',display:'flex',alignItems:'center',padding:'0 6px'}}>
+                  <span style={{fontSize:isMb?8:9,fontWeight:700,color:'#78909c'}}>合計</span>
+                </div>
+                <div style={{width:TSLOTS*SW,flexShrink:0,position:'relative'}}>
+                  {Array.from({length:THRS},(_,hi)=>{
+                    const c=hCounts[hi]?._||0;
+                    const totalReq=positions.reduce((s,p)=>s+(req[p.id]||0),0);
+                    const ok=totalReq===0||c>=totalReq;
+                    return(
+                      <div key={hi} style={{position:'absolute',left:hi*HW,top:0,width:HW,height:'100%',
+                        borderLeft:'1px solid rgba(255,255,255,.07)',
+                        display:'flex',alignItems:'center',justifyContent:'center'}}>
+                        {c>0&&<span style={{fontSize:8,fontWeight:800,color:ok?'#69f0ae':'#ff5252',fontFamily:"'JetBrains Mono',monospace"}}>{c}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+                {!isMb&&<div style={{width:TW,flexShrink:0,borderLeft:'1px solid #37474f',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <span style={{fontSize:9,fontWeight:800,color:'#b0bec5',fontFamily:"'JetBrains Mono',monospace"}}>
+                    {staff.filter(s=>shifts[`${s.id}-${sDk}`]).length}名出勤
+                  </span>
+                </div>}
+              </div>
+            </div>
+
+          </div>{/* /sticky */}
+
+          {/* Staff rows */}
+          {staff.map((s,si)=>{
+            const sh=shifts[`${s.id}-${sDk}`];
+            const dp=drag?.sid===s.id?drag:null;
+            const barRef=useRef(null);
+            const pref=prefs[`${s.id}-${sDk}`];
+            const prefStart=pref?.available?t2s(pref.from):null;
+            const prefEnd  =pref?.available?t2s(pref.to):null;
+            const even=si%2===0;
+
+            /* touch handlers */
+            const touchStart=e=>{
+              if(isMb){
+                // mobile: long-press for drag, tap for modal
+                const t=e.touches[0];
+                if(!barRef.current)return;
+                const started=onMD(s.id,t.clientX,barRef.current);
+                if(!started)e.preventDefault();
+              } else {
+                if(!barRef.current)return;
+                onMD(s.id,e.touches[0].clientX,barRef.current);
+              }
+            };
+            const touchMove=e=>{
+              if(!barRef.current)return;
+              onMM(s.id,e.touches[0].clientX,barRef.current);
+            };
+            const touchEnd=()=>onMU(s.id);
+
+            return(
+              <div key={s.id} style={{display:'flex',borderBottom:'1px solid #eceff1',background:even?'#fff':'#f9fafb',height:RH}}>
+                {/* Name */}
+                <div style={{width:NW,flexShrink:0,borderRight:'1px solid #cfd8dc',display:'flex',alignItems:'center',gap:isMb?4:6,padding:isMb?'0 4px':'0 6px 0 8px',overflow:'hidden',
+                  cursor:isMb?'pointer':'default'}}
+                  onClick={isMb?()=>onTap(s.id):undefined}
+                >
+                  <span style={{background:posOf(s.pid).color,color:'#fff',fontSize:isMb?8:9,fontWeight:800,padding:'1px 3px',borderRadius:3,flexShrink:0}}>{s.type}</span>
+                  <span style={{fontSize:isMb?11:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.name}</span>
+                  {pref&&!isMb&&(
+                    <span style={{marginLeft:'auto',fontSize:9,color:pref.available?'#4caf50':'#ef5350',flexShrink:0,fontWeight:700}}>
+                      {pref.available?'○':'✕'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Bar area */}
+                <div ref={barRef}
+                  style={{width:TSLOTS*SW,flexShrink:0,position:'relative',cursor:isMb?'pointer':'crosshair',userSelect:'none',touchAction:'pan-x'}}
+                  onMouseDown={e=>{if(!barRef.current||isMb)return;onMD(s.id,e.clientX,barRef.current);}}
+                  onMouseMove={e=>{if(!barRef.current||isMb)return;onMM(s.id,e.clientX,barRef.current);}}
+                  onMouseUp={()=>{if(!isMb)onMU(s.id);}}
+                  onTouchStart={touchStart}
+                  onTouchMove={touchMove}
+                  onTouchEnd={touchEnd}
+                  onClick={isMb&&!drag?()=>onTap(s.id):undefined}
+                >
+                  {/* Grid lines */}
+                  {Array.from({length:THRS},(_,hi)=>(
+                    <React.Fragment key={hi}>
+                      <div style={{position:'absolute',left:hi*HW,top:0,bottom:0,width:1,background:'#cfd8dc'}}/>
+                      {!isMb&&<>
+                        <div style={{position:'absolute',left:hi*HW+HW/2,top:0,bottom:0,width:1,background:'#e8ecef'}}/>
+                        <div style={{position:'absolute',left:hi*HW+HW/4,top:'35%',bottom:0,width:1,background:'#f3f5f7'}}/>
+                        <div style={{position:'absolute',left:hi*HW+HW*3/4,top:'35%',bottom:0,width:1,background:'#f3f5f7'}}/>
+                      </>}
+                      {isMb&&<div style={{position:'absolute',left:hi*HW+HW/2,top:'30%',bottom:0,width:1,background:'#eef0f1'}}/>}
+                    </React.Fragment>
+                  ))}
+                  <div style={{position:'absolute',right:0,top:0,bottom:0,width:1,background:'#cfd8dc'}}/>
+
+                  {/* Pref overlays */}
+                  {pref&&!pref.available&&(
+                    <div style={{position:'absolute',inset:0,background:'rgba(80,96,104,.52)',zIndex:1,pointerEvents:'none'}}/>
+                  )}
+                  {pref?.available&&prefStart!==null&&prefEnd!==null&&(
+                    <>
+                      {prefStart>0&&<div style={{position:'absolute',left:0,width:prefStart*SW,top:0,bottom:0,background:'rgba(80,96,104,.52)',zIndex:1,pointerEvents:'none',borderRight:'2px solid rgba(80,96,104,.7)'}}/>}
+                      {prefEnd<TSLOTS&&<div style={{position:'absolute',left:prefEnd*SW,width:(TSLOTS-prefEnd)*SW,top:0,bottom:0,background:'rgba(80,96,104,.52)',zIndex:1,pointerEvents:'none',borderLeft:'2px solid rgba(80,96,104,.7)'}}/>}
+                    </>
+                  )}
+
+                  {/* ── Business hours overlay (hatch outside open hours) ── */}
+                  {biz.closed?(
+                    /* 定休日: 全体に斜線 */
+                    <div style={{position:'absolute',inset:0,zIndex:2,pointerEvents:'none',
+                      background:'repeating-linear-gradient(135deg,rgba(55,71,79,.13) 0px,rgba(55,71,79,.13) 3px,transparent 3px,transparent 9px)',
+                      borderTop:'2px solid rgba(198,40,40,.3)',borderBottom:'2px solid rgba(198,40,40,.3)'}}>
+                      <span style={{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-50%)',fontSize:9,color:'#ef9a9a',fontWeight:700,whiteSpace:'nowrap',letterSpacing:.05}}>定休日</span>
+                    </div>
+                  ):(bizOpen!==null&&bizClose!==null)&&(
+                    <>
+                      {/* before open */}
+                      {bizOpen>0&&(
+                        <div style={{position:'absolute',left:0,width:bizOpen*SW,top:0,bottom:0,zIndex:2,pointerEvents:'none',
+                          background:'repeating-linear-gradient(135deg,rgba(55,71,79,.16) 0px,rgba(55,71,79,.16) 3px,transparent 3px,transparent 9px)',
+                          borderRight:'2px solid rgba(96,125,139,.5)'}}/>
+                      )}
+                      {/* after close */}
+                      {bizClose<TSLOTS&&(
+                        <div style={{position:'absolute',left:bizClose*SW,width:(TSLOTS-bizClose)*SW,top:0,bottom:0,zIndex:2,pointerEvents:'none',
+                          background:'repeating-linear-gradient(135deg,rgba(55,71,79,.16) 0px,rgba(55,71,79,.16) 3px,transparent 3px,transparent 9px)',
+                          borderLeft:'2px solid rgba(96,125,139,.5)'}}/>
+                      )}
+                    </>
+                  )}
+
+                  {/* Drag preview */}
+                  {dp&&(
+                    <div style={{position:'absolute',zIndex:3,pointerEvents:'none',
+                      left:Math.min(dp.s0,dp.s1)*SW,width:(Math.abs(dp.s1-dp.s0)+1)*SW,
+                      top:2,height:RH-4,background:'rgba(33,150,243,.15)',border:'2px dashed #2196f3',borderRadius:3}}/>
+                  )}
+
+                  {/* Shift block */}
+                  {sh&&(
+                    <div
+                      onMouseDown={e=>e.stopPropagation()}
+                      onClick={e=>{e.stopPropagation();setModal({type:'edit',sid:s.id,s:sh.s,e:sh.e,pid:sh.pid,brk:sh.brk||0,dk:sDk});}}
+                      style={{position:'absolute',zIndex:4,left:sh.s*SW+1,width:(sh.e-sh.s)*SW-2,top:2,height:RH-4,
+                        background:posOf(sh.pid).color,borderRadius:3,cursor:'pointer',
+                        display:'flex',alignItems:'center',paddingLeft:4,overflow:'hidden',whiteSpace:'nowrap',
+                        boxShadow:'0 1px 4px rgba(0,0,0,.22)'}}
+                      onMouseEnter={e=>e.currentTarget.style.filter='brightness(1.12)'}
+                      onMouseLeave={e=>e.currentTarget.style.filter=''}
+                    >
+                      {(sh.e-sh.s)*SW>(isMb?40:55)&&(
+                        <span style={{color:'#fff',fontSize:isMb?8:9,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",pointerEvents:'none'}}>
+                          {isMb?`${s2t(sh.s)}-${s2t(sh.e)}`:`${posOf(sh.pid).short} ${s2t(sh.s)}〜${s2t(sh.e)}`}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {!sh&&!isMb&&(
+                    <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',paddingLeft:8,pointerEvents:'none',zIndex:2}}>
+                      <span style={{fontSize:10,color:'#d0d8dc'}}>ドラッグでシフト追加</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Totals (desktop only) */}
+                {!isMb&&<div style={{width:TW,flexShrink:0,borderLeft:'1px solid #cfd8dc',display:'flex',alignItems:'center',justifyContent:'center',gap:3,padding:'0 6px',fontSize:11}}>
+                  {sh?(
+                    <>
+                      <span style={{fontFamily:"'JetBrains Mono',monospace",color:'#546e7a',fontSize:11}}>{s2t(sh.s)}</span>
+                      <span style={{color:'#ccc'}}>〜</span>
+                      <span style={{fontFamily:"'JetBrains Mono',monospace",color:'#546e7a',fontSize:11}}>{s2t(sh.e)}</span>
+                      <span style={{color:'#ddd',margin:'0 2px'}}>|</span>
+                      <span style={{fontFamily:"'JetBrains Mono',monospace",color:'#1565c0',fontWeight:800,fontSize:12}}>{slotH(sh.s,sh.e).toFixed(1)}h</span>
+                      {sh.brk>0&&<span style={{fontSize:9,color:'#90a4ae'}}>休{sh.brk}分</span>}
+                    </>
+                  ):<span style={{color:'#e0e0e0'}}>—</span>}
+                </div>}
+              </div>
+            );
+          })}
+
+          <WeeklyTotals {...{staff,shifts,monday,weeks,isMb,NW}}/>
+          <div style={{height:20}}/>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ── Weekly Totals strip ── */
+function WeeklyTotals({staff,shifts,monday,weeks,isMb,NW}){
+  return(
+    <div style={{display:'flex',minHeight:22,background:'#e8eaf6',borderTop:'2px solid #9fa8da',flexWrap:'wrap'}}>
+      <div style={{width:NW,flexShrink:0,borderRight:'1px solid #9fa8da',padding:'4px 6px',display:'flex',alignItems:'center'}}>
+        <span style={{fontSize:9,fontWeight:700,color:'#3949ab'}}>今週累計</span>
+      </div>
+      <div style={{flex:1,padding:'4px 8px',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',overflow:'hidden'}}>
+        {staff.map(s=>{
+          const tot=wk(monday).reduce((sum,d)=>{const x=shifts[`${s.id}-${dk(d)}`];return x?sum+slotH(x.s,x.e):sum;},0);
+          return tot>0?<span key={s.id} style={{fontSize:10,color:'#3949ab',fontWeight:600,whiteSpace:'nowrap'}}>{s.name}:<strong style={{fontFamily:"'JetBrains Mono',monospace",marginLeft:2}}>{tot.toFixed(1)}h</strong></span>:null;
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════ ADMIN SCREEN ══════════════════════ */
+function AdminScreen({positions,setPos,staff,setStaff,prefs,setPrefs,req,setReq,shifts,setShifts,posOf,isMb,bizHours,setBiz,types,setTypes}){
+  const [tab,setTab]=useState('staff');
+  return(
+    <div style={{display:'flex',flexDirection:'column',flex:1,overflow:'hidden'}}>
+      <div style={{background:'#fff',borderBottom:'2px solid #e8eaf6',display:'flex',padding:`0 ${isMb?8:20}px`,gap:0,flexShrink:0,overflowX:'auto'}}>
+        {[['staff','👥 スタッフ'],['position','🏷️ ポジション'],['biz','⏰ 営業時間'],['prefs','📅 希望シフト']].map(([id,label])=>(
+          <button key={id} onClick={()=>setTab(id)} style={{
+            padding:isMb?'10px 10px':'11px 18px',border:'none',background:'none',cursor:'pointer',
+            fontSize:isMb?12:13,fontWeight:tab===id?800:500,
+            color:tab===id?'#1a237e':'#78909c',
+            borderBottom:tab===id?'2.5px solid #1a237e':'2.5px solid transparent',
+            marginBottom:-2,whiteSpace:'nowrap',
+          }}>{label}</button>
+        ))}
+      </div>
+      <div style={{flex:1,overflow:'auto',padding:isMb?12:24,WebkitOverflowScrolling:'touch'}}>
+        {tab==='staff'   &&<StaffAdmin    staff={staff} setStaff={setStaff} positions={positions} posOf={posOf} setShifts={setShifts} req={req} setReq={setReq} isMb={isMb} types={types} setTypes={setTypes}/>}
+        {tab==='position'&&<PositionAdmin positions={positions} setPos={setPos} req={req} setReq={setReq} isMb={isMb}/>}
+        {tab==='biz'     &&<BizAdmin      bizHours={bizHours} setBiz={setBiz} isMb={isMb}/>}
+        {tab==='prefs'   &&<PrefsAdmin    staff={staff} prefs={prefs} setPrefs={setPrefs} posOf={posOf} isMb={isMb}/>}
+      </div>
+    </div>
+  );
+}
+
+/* ── Staff Admin ── */
+function StaffAdmin({staff,setStaff,positions,posOf,setShifts,req,setReq,isMb,types,setTypes}){
+  const [editing,setEditing]=useState(null);
+  const [form,setForm]=useState({name:'',type:types[0]||'P'});
+  const [newType,setNewType]=useState('');
+
+  const openEdit=s=>{setEditing(s.id);setForm({name:s.name,type:s.type});};
+  const openNew =()=>{setEditing('new');setForm({name:'',type:types[0]||'P'});};
+  const save=()=>{
+    if(!form.name.trim())return;
+    if(editing==='new') setStaff(p=>[...p,{id:Date.now().toString(),pid:positions[0]?.id||'',...form,name:form.name.trim()}]);
+    else setStaff(p=>p.map(s=>s.id===editing?{...s,...form,name:form.name.trim()}:s));
+    setEditing(null);
+  };
+  const del=id=>{
+    if(!confirm('このスタッフを削除しますか？'))return;
+    setStaff(p=>p.filter(s=>s.id!==id));
+    setShifts(p=>{const n={...p};Object.keys(n).filter(k=>k.startsWith(id+'-')).forEach(k=>delete n[k]);return n;});
+  };
+  const addType=()=>{
+    const t=newType.trim();
+    if(!t||types.includes(t))return;
+    setTypes(p=>[...p,t]);
+    setNewType('');
+  };
+  const delType=t=>{
+    if(types.length<=1){alert('区分は1つ以上必要です');return;}
+    if(!confirm(`「${t}」を削除しますか？`))return;
+    setTypes(p=>p.filter(x=>x!==t));
+  };
+
+  return(
+    <div style={{maxWidth:900}}>
+      {/* ── 区分管理 ── */}
+      <div style={{background:'#fff',borderRadius:10,border:'1px solid #e8eaed',padding:'14px 16px',marginBottom:18}}>
+        <div style={{fontWeight:700,fontSize:13,color:'#1a237e',marginBottom:10}}>🏷 区分の管理</div>
+        <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
+          {types.map(t=>(
+            <div key={t} style={{display:'flex',alignItems:'center',gap:4,background:'#eceff1',borderRadius:20,padding:'4px 10px 4px 12px',border:'1px solid #cfd8dc'}}>
+              <span style={{fontSize:13,fontWeight:700,color:'#37474f'}}>{t}</span>
+              <button onClick={()=>delType(t)} style={{width:16,height:16,borderRadius:'50%',border:'none',background:'#b0bec5',color:'#fff',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontWeight:900,lineHeight:1}}>×</button>
+            </div>
+          ))}
+        </div>
+        <div style={{display:'flex',gap:6}}>
+          <input value={newType} onChange={e=>setNewType(e.target.value)}
+            onKeyDown={e=>e.key==='Enter'&&addType()}
+            placeholder="新しい区分を入力（例：ﾊﾞ）" maxLength={10}
+            style={{flex:1,padding:'7px 10px',border:'1.5px solid #cfd8dc',borderRadius:7,fontSize:13,outline:'none'}}/>
+          <button onClick={addType} style={{...bBtn('#1a237e'),padding:'7px 14px'}}>＋ 追加</button>
+        </div>
+      </div>
+
+      {/* ── スタッフ一覧 ── */}
+      <div style={{display:'flex',alignItems:'center',marginBottom:14,flexWrap:'wrap',gap:8}}>
+        <h2 style={{fontSize:isMb?15:17,fontWeight:800,color:'#1a237e'}}>👥 スタッフ一覧</h2>
+        <span style={{fontSize:12,color:'#90a4ae'}}>{staff.length}名</span>
+        <button onClick={openNew} style={{...bBtn('#1a237e'),marginLeft:'auto'}}>＋ 追加</button>
+      </div>
+
+      {editing&&(
+        <div style={{background:'#e8eaf6',border:'2px solid #9fa8da',borderRadius:10,padding:14,marginBottom:16,animation:'pop .16s ease-out'}}>
+          <div style={{fontWeight:700,fontSize:13,color:'#1a237e',marginBottom:12}}>{editing==='new'?'新規追加':'スタッフ編集'}</div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'flex-end'}}>
+            <FG label="名前" style={{flex:3,minWidth:120}}>
+              <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&save()} style={INP} placeholder="田中 太郎"/>
+            </FG>
+            <FG label="区分" style={{flex:1,minWidth:80}}>
+              <select value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))} style={SEL}>
+                {types.map(t=><option key={t} value={t}>{t}</option>)}
+              </select>
+            </FG>
+            <div style={{display:'flex',gap:6}}>
+              <button onClick={save} style={bBtn('#1a237e')}>保存</button>
+              <button onClick={()=>setEditing(null)} style={bBtn('#90a4ae')}>キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile: cards */}
+      {isMb?(
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {staff.map((s,si)=>(
+            <div key={s.id} style={{background:'#fff',borderRadius:10,border:'1px solid #e8eaed',padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}>
+              <div style={{width:38,height:38,borderRadius:'50%',background:'#1a237e',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:800,fontSize:15,flexShrink:0}}>
+                {s.name.trim()[0]}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:14,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.name}</div>
+                <div style={{fontSize:11,color:'#90a4ae',marginTop:2}}>
+                  <span style={{background:'#eceff1',padding:'1px 7px',borderRadius:3,color:'#546e7a',fontWeight:600}}>{s.type}</span>
+                </div>
+              </div>
+              <div style={{display:'flex',gap:5}}>
+                <button onClick={()=>openEdit(s)} style={{padding:'6px 12px',background:'#e3f2fd',color:'#1565c0',border:'none',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700}}>編集</button>
+                <button onClick={()=>del(s.id)} style={{padding:'6px 12px',background:'#ffebee',color:'#c62828',border:'none',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700}}>削除</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ):(
+        /* Desktop: table */
+        <div style={{background:'#fff',borderRadius:10,border:'1px solid #e0e0e0',overflow:'hidden'}}>
+          <table style={{width:'100%',borderCollapse:'collapse'}}>
+            <thead>
+              <tr style={{background:'#263238'}}>
+                {['','名前','区分','操作'].map((h,i)=>(
+                  <th key={i} style={{padding:'9px 12px',textAlign:'left',color:'#b0bec5',fontSize:11,fontWeight:700}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {staff.map((s,si)=>(
+                <tr key={s.id} style={{borderBottom:'1px solid #f5f5f5',background:si%2===0?'#fff':'#fafafa'}}
+                  onMouseEnter={e=>e.currentTarget.style.background='#f3f4ff'}
+                  onMouseLeave={e=>e.currentTarget.style.background=si%2===0?'#fff':'#fafafa'}>
+                  <td style={{padding:'8px 10px',width:40}}>
+                    <div style={{width:30,height:30,borderRadius:'50%',background:'#1a237e',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:800,fontSize:12}}>{s.name.trim()[0]}</div>
+                  </td>
+                  <td style={{padding:'8px 12px',fontWeight:700,fontSize:13}}>{s.name}</td>
+                  <td style={{padding:'8px 12px'}}>
+                    <span style={{background:'#eceff1',color:'#546e7a',fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:4}}>{s.type}</span>
+                  </td>
+                  <td style={{padding:'8px 12px'}}>
+                    <div style={{display:'flex',gap:5}}>
+                      <button onClick={()=>openEdit(s)} style={{padding:'4px 11px',background:'#e3f2fd',color:'#1565c0',border:'none',borderRadius:5,cursor:'pointer',fontSize:11,fontWeight:700}}>編集</button>
+                      <button onClick={()=>del(s.id)} style={{padding:'4px 11px',background:'#ffebee',color:'#c62828',border:'none',borderRadius:5,cursor:'pointer',fontSize:11,fontWeight:700}}>削除</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Position Admin ── */
+function PositionAdmin({positions,setPos,req,setReq,isMb}){
+  const [editing,setEditing]=useState(null);
+  const [form,setForm]=useState({name:'',short:'',color:'#1565c0'});
+  const openEdit=p=>{setEditing(p.id);setForm({name:p.name,short:p.short,color:p.color});};
+  const openNew =()=>{setEditing('new');setForm({name:'',short:'',color:'#1565c0'});};
+  const save=()=>{
+    if(!form.name.trim())return;
+    const short=form.short.trim()||form.name.slice(0,3);
+    if(editing==='new'){const id='pos_'+Date.now();setPos(p=>[...p,{id,...form,short}]);}
+    else setPos(p=>p.map(x=>x.id===editing?{...x,...form,short}:x));
+    setEditing(null);
+  };
+  const del=id=>{
+    if(positions.length<=1){alert('ポジションは1つ以上必要です');return;}
+    if(!confirm('このポジションを削除しますか？'))return;
+    setPos(p=>p.filter(x=>x.id!==id));
+    setReq(r=>{const n={...r};delete n[id];return n;});
+  };
+
+  return(
+    <div style={{maxWidth:700}}>
+      <div style={{display:'flex',alignItems:'center',marginBottom:14,gap:8}}>
+        <h2 style={{fontSize:isMb?15:17,fontWeight:800,color:'#1a237e'}}>🏷️ ポジション一覧</h2>
+        <button onClick={openNew} style={{...bBtn('#1a237e'),marginLeft:'auto'}}>＋ 追加</button>
+      </div>
+
+      {editing&&(
+        <div style={{background:'#e8eaf6',border:'2px solid #9fa8da',borderRadius:10,padding:14,marginBottom:16,animation:'pop .16s ease-out'}}>
+          <div style={{fontWeight:700,fontSize:13,color:'#1a237e',marginBottom:12}}>{editing==='new'?'新規追加':'ポジション編集'}</div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'flex-end'}}>
+            <FG label="ポジション名" style={{flex:2,minWidth:100}}><input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} style={INP} placeholder="カウンター"/></FG>
+            <FG label="短縮名" style={{flex:1,minWidth:80}}><input value={form.short} onChange={e=>setForm(f=>({...f,short:e.target.value}))} style={INP} placeholder="カウ" maxLength={5}/></FG>
+            <FG label="カラー" style={{flex:'none'}}>
+              <div style={{display:'flex',alignItems:'center',gap:6}}>
+                <input type="color" value={form.color} onChange={e=>setForm(f=>({...f,color:e.target.value}))}
+                  style={{width:38,height:34,border:'1.5px solid #ddd',borderRadius:6,cursor:'pointer',padding:2}}/>
+                <div style={{display:'flex',gap:4,flexWrap:'wrap',maxWidth:180}}>
+                  {PRESET_COLORS.map(c=>(
+                    <div key={c} onClick={()=>setForm(f=>({...f,color:c}))}
+                      style={{width:18,height:18,borderRadius:3,background:c,cursor:'pointer',
+                        border:form.color===c?'2px solid #fff':'2px solid transparent',
+                        outline:form.color===c?`2px solid ${c}`:'none'}}/>
+                  ))}
+                </div>
+              </div>
+            </FG>
+            <div style={{display:'flex',gap:6}}>
+              <button onClick={save} style={bBtn('#1a237e')}>保存</button>
+              <button onClick={()=>setEditing(null)} style={bBtn('#90a4ae')}>キャンセル</button>
+            </div>
+          </div>
+          <div style={{marginTop:12,display:'flex',alignItems:'center',gap:8,fontSize:11,color:'#78909c'}}>
+            プレビュー:
+            <span style={{background:form.color,color:'#fff',fontSize:11,fontWeight:700,padding:'2px 9px',borderRadius:4}}>{form.short||form.name}</span>
+            <span style={{background:form.color+'20',color:form.color,fontSize:11,fontWeight:700,padding:'2px 9px',borderRadius:10}}>{form.name}</span>
+          </div>
+        </div>
+      )}
+
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {positions.map((p,pi)=>(
+          <div key={p.id} style={{background:'#fff',borderRadius:10,border:'1px solid #e8eaed',padding:'12px 14px',display:'flex',alignItems:'center',gap:12}}>
+            <div style={{width:36,height:36,borderRadius:8,background:p.color,flexShrink:0,boxShadow:`0 2px 6px ${p.color}50`}}/>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:700,fontSize:isMb?14:15}}>{p.name}</div>
+              <div style={{fontSize:11,color:'#90a4ae',marginTop:2,display:'flex',alignItems:'center',gap:6}}>
+                <span style={{background:p.color,color:'#fff',padding:'1px 7px',borderRadius:4,fontWeight:700}}>{p.short}</span>
+              </div>
+            </div>
+            {/* required count */}
+            <div style={{display:'flex',alignItems:'center',gap:6}}>
+              <button onClick={()=>setReq(r=>({...r,[p.id]:Math.max(0,(r[p.id]||0)-1)}))}
+                style={{width:28,height:28,border:'1px solid #e0e0e0',borderRadius:6,cursor:'pointer',background:'#f5f5f5',fontWeight:700,fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,fontSize:15,minWidth:22,textAlign:'center',color:'#1a237e'}}>{req[p.id]||0}</span>
+              <button onClick={()=>setReq(r=>({...r,[p.id]:(r[p.id]||0)+1}))}
+                style={{width:28,height:28,border:'1px solid #e0e0e0',borderRadius:6,cursor:'pointer',background:'#f5f5f5',fontWeight:700,fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>＋</button>
+              <span style={{fontSize:11,color:'#90a4ae'}}>名</span>
+            </div>
+            <div style={{display:'flex',gap:5}}>
+              <button onClick={()=>openEdit(p)} style={{padding:'5px 11px',background:'#e3f2fd',color:'#1565c0',border:'none',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:700}}>編集</button>
+              <button onClick={()=>del(p.id)} style={{padding:'5px 11px',background:'#ffebee',color:'#c62828',border:'none',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:700}}>削除</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Prefs Admin ── */
+/* ── Business Hours Admin ── */
+function BizAdmin({bizHours,setBiz,isMb}){
+  const setBizDay=(dow,field,val)=>setBiz(b=>({...b,[dow]:{...b[dow],[field]:val}}));
+
+  const copyAll=(src)=>{
+    const srcBiz=bizHours[src];
+    if(!srcBiz)return;
+    setBiz(b=>{const n={...b};for(let i=0;i<7;i++)if(i!==src)n[i]={...srcBiz};return n;});
+  };
+
+  return(
+    <div style={{maxWidth:700}}>
+      <h2 style={{fontSize:isMb?15:17,fontWeight:800,color:'#1a237e',marginBottom:6}}>⏰ 営業時間設定</h2>
+      <p style={{fontSize:12,color:'#78909c',marginBottom:20}}>
+        営業時間外のスロットはシフト表で斜線（網掛け）表示されます。定休日は全体に斜線が入ります。
+      </p>
+
+      {/* legend */}
+      <div style={{display:'flex',gap:16,flexWrap:'wrap',marginBottom:20,padding:'10px 14px',background:'#fff',borderRadius:9,border:'1px solid #e0e0e0',fontSize:12,color:'#78909c'}}>
+        <span style={{display:'flex',alignItems:'center',gap:7}}>
+          <span style={{width:40,height:14,borderRadius:3,background:'repeating-linear-gradient(135deg,rgba(55,71,79,.16) 0px,rgba(55,71,79,.16) 3px,transparent 3px,transparent 9px)',display:'inline-block',border:'1px solid #b0bec5'}}/>
+          営業時間外（斜線）
+        </span>
+        <span style={{display:'flex',alignItems:'center',gap:7}}>
+          <span style={{width:40,height:14,borderRadius:3,background:'#fff',display:'inline-block',border:'1px solid #b0bec5'}}/>
+          営業時間内（通常表示）
+        </span>
+        <span style={{display:'flex',alignItems:'center',gap:7}}>
+          <span style={{width:40,height:14,borderRadius:3,background:'repeating-linear-gradient(135deg,rgba(55,71,79,.13) 0px,rgba(55,71,79,.13) 3px,transparent 3px,transparent 9px)',display:'inline-block',border:'2px solid rgba(198,40,40,.3)'}}/>
+          定休日（全体斜線）
+        </span>
+      </div>
+
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {JA.map((label,dow)=>{
+          const biz=bizHours[dow]||{open:'09:00',close:'22:00',closed:false};
+          const sat=dow===5,sun=dow===6;
+          return(
+            <div key={dow} style={{
+              background:'#fff',borderRadius:10,
+              border:`2px solid ${biz.closed?'#ffcdd2':'#e8eaf6'}`,
+              padding:'12px 14px',
+              display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',
+            }}>
+              {/* Day label */}
+              <div style={{width:32,textAlign:'center',flexShrink:0}}>
+                <div style={{fontWeight:900,fontSize:20,lineHeight:1,color:sat?'#1565c0':sun?'#c62828':'#263238'}}>{label}</div>
+              </div>
+
+              {/* Closed toggle */}
+              <label style={{display:'flex',alignItems:'center',gap:6,cursor:'pointer',flexShrink:0}}>
+                <input type="checkbox" checked={biz.closed} onChange={e=>setBizDay(dow,'closed',e.target.checked)}
+                  style={{width:16,height:16,cursor:'pointer',accentColor:'#c62828'}}/>
+                <span style={{fontSize:12,fontWeight:700,color:biz.closed?'#c62828':'#90a4ae'}}>定休日</span>
+              </label>
+
+              {/* Time range */}
+              {!biz.closed&&(
+                <div style={{display:'flex',alignItems:'center',gap:8,flex:1,minWidth:200,flexWrap:'wrap'}}>
+                  <span style={{fontSize:11,color:'#78909c',flexShrink:0}}>営業時間</span>
+                  <select value={biz.open} onChange={e=>setBizDay(dow,'open',e.target.value)}
+                    style={{padding:'6px 6px',border:'1.5px solid #c8e6c9',borderRadius:7,fontSize:isMb?14:12,outline:'none',background:'#fff',color:'#263238',fontFamily:"'JetBrains Mono',monospace",cursor:'pointer'}}>
+                    {TOPTS.map(t=><option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <span style={{color:'#90a4ae',fontWeight:700}}>〜</span>
+                  <select value={biz.close} onChange={e=>setBizDay(dow,'close',e.target.value)}
+                    style={{padding:'6px 6px',border:'1.5px solid #c8e6c9',borderRadius:7,fontSize:isMb?14:12,outline:'none',background:'#fff',color:'#263238',fontFamily:"'JetBrains Mono',monospace",cursor:'pointer'}}>
+                    {TOPTS.map(t=><option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <span style={{fontSize:11,color:'#2e7d32',fontWeight:700,fontFamily:"'JetBrains Mono',monospace",background:'#e8f5e9',padding:'3px 8px',borderRadius:5,flexShrink:0}}>
+                    {slotH(t2s(biz.open),t2s(biz.close)).toFixed(1)}h
+                  </span>
+                </div>
+              )}
+              {biz.closed&&(
+                <div style={{fontSize:12,color:'#ef5350',fontWeight:700,flex:1}}>この曜日は定休日（全スロットに斜線表示）</div>
+              )}
+
+              {/* Copy to all */}
+              {!biz.closed&&(
+                <button onClick={()=>copyAll(dow)} style={{padding:'5px 10px',background:'#e8eaf6',color:'#3949ab',border:'none',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:700,flexShrink:0}}>
+                  全曜日にコピー
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── Prefs Admin ── */
+function PrefsAdmin({staff,prefs,setPrefs,posOf,isMb}){
+  const [selStaff,setSelStaff]=useState(staff[0]?.id||null);
+  const [prefMon,setPrefMon]  =useState(mon0(new Date()));
+  const s=staff.find(x=>x.id===selStaff);
+  const prefWeek=useMemo(()=>wk(prefMon),[prefMon]);
+
+  const setPref=(sid,dateK,field,val)=>{
+    setPrefs(p=>{const key=`${sid}-${dateK}`;
+      return{...p,[key]:{...({available:true,from:'10:00',to:'18:00',...p[key]}),[field]:val}};
+    });
+  };
+  const clearPref=(sid,dateK)=>{
+    setPrefs(p=>{const n={...p};delete n[`${sid}-${dateK}`];return n;});
+  };
+  const copyLast=()=>{
+    if(!s)return;
+    const lastMon=new Date(prefMon);lastMon.setDate(lastMon.getDate()-7);
+    const lw=wk(lastMon);
+    setPrefs(p=>{const n={...p};prefWeek.forEach((d,i)=>{const tk=`${s.id}-${dk(d)}`,lk=`${s.id}-${dk(lw[i])}`;if(p[lk])n[tk]={...p[lk]};});return n;});
+  };
+  const clearWk=()=>{
+    if(!s||!confirm('この週の希望をすべてクリアしますか？'))return;
+    setPrefs(p=>{const n={...p};prefWeek.forEach(d=>delete n[`${s.id}-${dk(d)}`]);return n;});
+  };
+  const weekHasPref=s&&prefWeek.some(d=>prefs[`${s.id}-${dk(d)}`]);
+  const wkLabel=`${prefWeek[0].getMonth()+1}/${prefWeek[0].getDate()} 〜 ${prefWeek[6].getMonth()+1}/${prefWeek[6].getDate()}`;
+
+  return(
+    <div style={{maxWidth:860}}>
+      <h2 style={{fontSize:isMb?15:17,fontWeight:800,color:'#1a237e',marginBottom:4}}>📅 希望シフト管理</h2>
+      <p style={{fontSize:12,color:'#78909c',marginBottom:16}}>スタッフと週を選んで希望時間を設定します。</p>
+
+      {/* Staff pills */}
+      <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14}}>
+        {staff.map(st=>{
+          const p=posOf(st.pid);
+          const hasAny=Object.keys(prefs).some(k=>k.startsWith(st.id+'-'));
+          return(
+            <button key={st.id} onClick={()=>setSelStaff(st.id)} style={{
+              padding:'6px 11px',border:`2px solid ${selStaff===st.id?p.color:'#e0e0e0'}`,
+              borderRadius:20,cursor:'pointer',fontSize:12,fontWeight:600,
+              background:selStaff===st.id?p.color+'18':'#fff',
+              color:selStaff===st.id?p.color:'#546e7a',
+              display:'flex',alignItems:'center',gap:5,transition:'all .12s',
+            }}>
+              <span style={{width:7,height:7,borderRadius:'50%',background:p.color,display:'inline-block'}}/>
+              {isMb?st.name.split(' ')[0]:st.name}
+              {hasAny&&<span style={{width:5,height:5,borderRadius:'50%',background:'#43a047',display:'inline-block'}}/>}
+            </button>
+          );
+        })}
+      </div>
+
+      {s&&(
+        <div style={{background:'#fff',borderRadius:12,border:'1px solid #e0e0e0',overflow:'hidden'}}>
+          {/* Staff header */}
+          <div style={{background:posOf(s.pid).color,padding:'10px 14px',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+            <div style={{width:34,height:34,borderRadius:'50%',background:'rgba(255,255,255,.2)',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:800,fontSize:14,flexShrink:0}}>
+              {s.name.trim()[0]}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:'#fff',fontWeight:800,fontSize:14}}>{s.name}</div>
+              <div style={{color:'rgba(255,255,255,.75)',fontSize:11}}>{s.type} ／ {posOf(s.pid).name}</div>
+            </div>
+            {/* Week nav */}
+            <div style={{display:'flex',alignItems:'center',gap:6,background:'rgba(0,0,0,.18)',borderRadius:8,padding:'5px 10px'}}>
+              <button onClick={()=>setPrefMon(m=>{const d=new Date(m);d.setDate(d.getDate()-7);return d;})}
+                style={{width:24,height:24,border:'none',borderRadius:5,cursor:'pointer',background:'rgba(255,255,255,.2)',color:'#fff',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700}}>‹</button>
+              <span style={{color:'#fff',fontSize:11,fontWeight:700,minWidth:isMb?90:120,textAlign:'center',fontFamily:"'JetBrains Mono',monospace"}}>{wkLabel}</span>
+              <button onClick={()=>setPrefMon(m=>{const d=new Date(m);d.setDate(d.getDate()+7);return d;})}
+                style={{width:24,height:24,border:'none',borderRadius:5,cursor:'pointer',background:'rgba(255,255,255,.2)',color:'#fff',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700}}>›</button>
+            </div>
+            <div style={{display:'flex',gap:5}}>
+              <button onClick={copyLast} style={{padding:'4px 10px',background:'rgba(255,255,255,.2)',border:'none',borderRadius:6,color:'#fff',cursor:'pointer',fontSize:11,fontWeight:700}}>↩ 前週コピー</button>
+              {weekHasPref&&<button onClick={clearWk} style={{padding:'4px 10px',background:'rgba(0,0,0,.2)',border:'none',borderRadius:6,color:'rgba(255,255,255,.8)',cursor:'pointer',fontSize:11,fontWeight:700}}>🗑 クリア</button>}
+            </div>
+          </div>
+
+          {/* Day grid — 1 col on mobile, 7 col on desktop */}
+          <div style={{padding:12}}>
+            <div style={{
+              display:'grid',
+              gridTemplateColumns:isMb?'1fr':'repeat(7,1fr)',
+              gap:8,
+            }}>
+              {prefWeek.map((d,i)=>{
+                const dateK=dk(d);
+                const pref=prefs[`${s.id}-${dateK}`];
+                const sat=i===5,sun=i===6;
+                const border=pref?.available===false?'#ffcdd2':pref?.available===true?'#c8e6c9':'#e8eaed';
+                const bg    =pref?.available===false?'#fff5f5':pref?.available===true?'#f6fff6':'#fafafa';
+                return(
+                  <div key={dateK} style={{border:`2px solid ${border}`,borderRadius:10,padding:isMb?'10px 12px':'10px 8px',background:bg}}>
+                    {/* Day label */}
+                    {isMb?(
+                      /* Mobile: horizontal layout */
+                      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:pref?.available===true?10:6}}>
+                        <div style={{display:'flex',alignItems:'baseline',gap:5}}>
+                          <span style={{fontWeight:900,fontSize:20,color:sat?'#1565c0':sun?'#c62828':'#263238'}}>{JA[i]}</span>
+                          <span style={{fontSize:11,color:'#90a4ae',fontFamily:"'JetBrains Mono',monospace"}}>{d.getMonth()+1}/{d.getDate()}</span>
+                        </div>
+                        <div style={{display:'flex',gap:5,flex:1,justifyContent:'flex-end'}}>
+                          <button onClick={()=>setPref(s.id,dateK,'available',true)} style={{padding:'5px 12px',border:`1.5px solid ${pref?.available===true?'#43a047':'#e0e0e0'}`,borderRadius:6,cursor:'pointer',fontSize:12,fontWeight:700,background:pref?.available===true?'#e8f5e9':'#fff',color:pref?.available===true?'#2e7d32':'#90a4ae'}}>○ 出勤可</button>
+                          <button onClick={()=>setPref(s.id,dateK,'available',false)} style={{padding:'5px 12px',border:`1.5px solid ${pref?.available===false?'#ef5350':'#e0e0e0'}`,borderRadius:6,cursor:'pointer',fontSize:12,fontWeight:700,background:pref?.available===false?'#ffebee':'#fff',color:pref?.available===false?'#c62828':'#90a4ae'}}>✕ 休み</button>
+                          {pref&&<button onClick={()=>clearPref(s.id,dateK)} style={{padding:'5px 8px',border:'1px solid #e0e0e0',borderRadius:6,cursor:'pointer',fontSize:11,background:'#fff',color:'#b0bec5'}}>✕</button>}
+                        </div>
+                      </div>
+                    ):(
+                      /* Desktop: vertical layout */
+                      <>
+                        <div style={{textAlign:'center',marginBottom:8}}>
+                          <div style={{fontWeight:900,fontSize:20,lineHeight:1,color:sat?'#1565c0':sun?'#c62828':'#263238'}}>{JA[i]}</div>
+                          <div style={{fontSize:10,color:'#90a4ae',fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{d.getMonth()+1}/{d.getDate()}</div>
+                        </div>
+                        <div style={{display:'flex',flexDirection:'column',gap:4,marginBottom:8}}>
+                          <button onClick={()=>setPref(s.id,dateK,'available',true)} style={{padding:'5px 0',border:`1.5px solid ${pref?.available===true?'#43a047':'#e0e0e0'}`,borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:700,background:pref?.available===true?'#e8f5e9':'#fff',color:pref?.available===true?'#2e7d32':'#90a4ae'}}>○ 出勤可</button>
+                          <button onClick={()=>setPref(s.id,dateK,'available',false)} style={{padding:'5px 0',border:`1.5px solid ${pref?.available===false?'#ef5350':'#e0e0e0'}`,borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:700,background:pref?.available===false?'#ffebee':'#fff',color:pref?.available===false?'#c62828':'#90a4ae'}}>✕ 休み</button>
+                          {pref&&<button onClick={()=>clearPref(s.id,dateK)} style={{padding:'3px 0',border:'1px solid #e8eaed',borderRadius:5,cursor:'pointer',fontSize:10,background:'#fff',color:'#b0bec5'}}>クリア</button>}
+                        </div>
+                      </>
+                    )}
+
+                    {/* Time selects */}
+                    {pref?.available===true&&(
+                      <div style={{display:'flex',alignItems:'center',gap:isMb?8:4,flexDirection:isMb?'row':'column'}}>
+                        <select value={pref.from||'10:00'} onChange={e=>setPref(s.id,dateK,'from',e.target.value)}
+                          style={{padding:'5px 4px',border:'1.5px solid #c8e6c9',borderRadius:6,fontSize:isMb?13:11,outline:'none',background:'#fff',color:'#263238',fontFamily:"'JetBrains Mono',monospace",flex:1,width:isMb?'auto':'100%'}}>
+                          {TOPTS.map(t=><option key={t} value={t}>{t}</option>)}
+                        </select>
+                        <span style={{color:'#90a4ae',fontWeight:700,fontSize:isMb?14:10}}>〜</span>
+                        <select value={pref.to||'18:00'} onChange={e=>setPref(s.id,dateK,'to',e.target.value)}
+                          style={{padding:'5px 4px',border:'1.5px solid #c8e6c9',borderRadius:6,fontSize:isMb?13:11,outline:'none',background:'#fff',color:'#263238',fontFamily:"'JetBrains Mono',monospace",flex:1,width:isMb?'auto':'100%'}}>
+                          {TOPTS.map(t=><option key={t} value={t}>{t}</option>)}
+                        </select>
+                        {pref.from&&pref.to&&(
+                          <span style={{fontSize:11,color:'#2e7d32',fontWeight:800,fontFamily:"'JetBrains Mono',monospace",background:'#e8f5e9',borderRadius:5,padding:'3px 6px',flexShrink:0}}>
+                            {slotH(t2s(pref.from),t2s(pref.to)).toFixed(1)}h
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {pref?.available===false&&(
+                      <div style={{textAlign:'center',fontSize:12,color:'#ef5350',fontWeight:700,background:'#ffebee',borderRadius:6,padding:'5px 0'}}>休み希望</div>
+                    )}
+                    {!pref&&<div style={{textAlign:'center',fontSize:11,color:'#c0c0c0',padding:'3px 0'}}>未設定</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Shift Modal ── */
+/* ══════════════════════ DEPLOY MODAL ══════════════════════ */
+function DeployModal({onClose,isMb}){
+  const [done,setDone]=useState(false);
+
+  const handleDeploy=()=>{
+    // ① HTMLをダウンロード
+    const html='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));
+    a.download='index.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // ② Netlify Dropを別タブで開く
+    window.open('https://app.netlify.com/drop','_blank');
+    setDone(true);
+  };
+
+  const boxStyle=isMb?{
+    position:'fixed',bottom:0,left:0,right:0,background:'#fff',
+    borderRadius:'16px 16px 0 0',padding:'24px 20px 40px',
+    boxShadow:'0 -8px 30px rgba(0,0,0,.2)',animation:'slideUp .22s ease-out',
+  }:{
+    background:'#fff',borderRadius:16,padding:32,width:420,
+    boxShadow:'0 24px 60px rgba(0,0,0,.25)',animation:'pop .16s ease-out',
+  };
+
+  return(
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',display:'flex',
+      alignItems:isMb?'flex-end':'center',justifyContent:'center',zIndex:500,backdropFilter:'blur(4px)'}}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={boxStyle}>
+        {isMb&&<div style={{width:40,height:4,background:'#e0e0e0',borderRadius:2,margin:'0 auto 16px'}}/>}
+
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:20}}>
+          <span style={{fontSize:26}}>🚀</span>
+          <div>
+            <div style={{fontWeight:800,fontSize:18,color:'#1a237e'}}>デプロイ</div>
+            <div style={{fontSize:11,color:'#90a4ae'}}>ファイルをNetlifyにアップロードするだけ</div>
+          </div>
+          <button onClick={onClose} style={{marginLeft:'auto',border:'none',background:'none',cursor:'pointer',fontSize:22,color:'#ccc'}}>×</button>
+        </div>
+
+        {!done?(
+          <>
+            {/* Steps */}
+            <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:24}}>
+              {[
+                {n:'①',icon:'📥',title:'ボタンを押す',desc:'HTMLが自動でダウンロードされ、Netlifyが開きます'},
+                {n:'②',icon:'🖱️',title:'ファイルをドラッグ',desc:'Netlifyの画面にダウンロードしたファイルをドロップ'},
+                {n:'③',icon:'✅',title:'完了！',desc:'数秒で反映されます'},
+              ].map(s=>(
+                <div key={s.n} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 14px',background:'#f8f9ff',borderRadius:9,border:'1px solid #e8eaf6'}}>
+                  <div style={{width:28,height:28,borderRadius:'50%',background:'#1a237e',color:'#fff',fontWeight:900,fontSize:12,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{s.n}</div>
+                  <div style={{fontSize:18,flexShrink:0}}>{s.icon}</div>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:13,color:'#263238'}}>{s.title}</div>
+                    <div style={{fontSize:11,color:'#90a4ae',marginTop:1}}>{s.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button onClick={handleDeploy} style={{
+              width:'100%',padding:16,border:'none',borderRadius:10,cursor:'pointer',
+              fontWeight:800,fontSize:16,
+              background:'linear-gradient(135deg,#1a237e,#1565c0)',
+              color:'#fff',boxShadow:'0 4px 16px rgba(26,35,126,.35)',
+              display:'flex',alignItems:'center',justifyContent:'center',gap:8,
+            }}>
+              <span>📥</span> HTMLをダウンロード ＋ Netlifyを開く
+            </button>
+          </>
+        ):(
+          <>
+            <div style={{background:'#e8f5e9',border:'2px solid #a5d6a7',borderRadius:10,padding:'16px',marginBottom:20,textAlign:'center'}}>
+              <div style={{fontSize:32,marginBottom:8}}>📥</div>
+              <div style={{fontWeight:800,color:'#2e7d32',fontSize:15,marginBottom:4}}>ダウンロード完了！</div>
+              <div style={{fontSize:12,color:'#4caf50',fontWeight:600}}>Netlifyのタブも開きました</div>
+            </div>
+
+            <div style={{background:'#fff8e1',border:'1px solid #ffcc02',borderRadius:9,padding:'12px 14px',marginBottom:20}}>
+              <div style={{fontWeight:700,color:'#f57f17',fontSize:13,marginBottom:6}}>📌 次のステップ</div>
+              <div style={{fontSize:12,color:'#795548',lineHeight:1.8}}>
+                Netlifyのタブで<br/>
+                <strong>「shift-scheduler.html」をドラッグ＆ドロップ</strong><br/>
+                するだけで公開完了です！
+              </div>
+            </div>
+
+            <div style={{display:'flex',gap:8}}>
+              <button onClick={()=>window.open('https://app.netlify.com/drop','_blank')} style={{
+                flex:1,padding:12,background:'#e8f5e9',color:'#2e7d32',
+                border:'2px solid #a5d6a7',borderRadius:9,fontWeight:700,cursor:'pointer',fontSize:13,
+              }}>🌐 Netlifyをもう一度開く</button>
+              <button onClick={onClose} style={{padding:'12px 16px',background:'#f5f5f5',color:'#78909c',border:'none',borderRadius:9,fontWeight:700,cursor:'pointer'}}>閉じる</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Shift Modal ── */
+function ShiftModal({modal,setModal,positions,staff,save,del,isMb}){
+  const s=staff.find(x=>x.id===modal.sid);
+  const box=isMb?{
+    position:'fixed',bottom:0,left:0,right:0,
+    background:'#fff',borderRadius:'16px 16px 0 0',
+    padding:'20px 20px 32px',
+    boxShadow:'0 -8px 30px rgba(0,0,0,.2)',
+    animation:'slideUp .22s ease-out',
+    maxHeight:'90vh',overflowY:'auto',
+  }:{
+    background:'#fff',borderRadius:14,padding:26,width:390,
+    boxShadow:'0 24px 60px rgba(0,0,0,.25)',animation:'pop .16s ease-out',
+  };
+  const overlay=isMb?{position:'fixed',inset:0,background:'rgba(0,0,0,.4)',zIndex:400,display:'flex',alignItems:'flex-end'}
+    :{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:400,backdropFilter:'blur(4px)'};
+
+  return(
+    <div style={overlay} onClick={e=>e.target===e.currentTarget&&setModal(null)}>
+      <div style={box}>
+        {isMb&&<div style={{width:40,height:4,background:'#e0e0e0',borderRadius:2,margin:'0 auto 16px'}}/>}
+        <div style={{display:'flex',alignItems:'center',marginBottom:4}}>
+          <div style={{width:12,height:12,borderRadius:3,background:(positions.find(p=>p.id===modal.pid)||positions[0])?.color,marginRight:8,flexShrink:0}}/>
+          <span style={{fontWeight:800,fontSize:16}}>{modal.type==='add'?'シフト追加':'シフト編集'}</span>
+          <button onClick={()=>setModal(null)} style={{marginLeft:'auto',border:'none',background:'none',cursor:'pointer',fontSize:22,color:'#ccc',lineHeight:1}}>×</button>
+        </div>
+        <div style={{fontSize:12,color:'#90a4ae',marginBottom:16}}>{s?.name} — {modal.dk}</div>
+
+        <div style={{fontSize:11,fontWeight:700,color:'#78909c',marginBottom:6}}>ポジション</div>
+        <div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:16}}>
+          {positions.map(p=>(
+            <button key={p.id} onClick={()=>setModal(m=>({...m,pid:p.id}))} style={{
+              padding:'6px 11px',border:`2px solid ${modal.pid===p.id?p.color:'#e0e0e0'}`,
+              borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700,
+              background:modal.pid===p.id?p.color:'#fff',color:modal.pid===p.id?'#fff':'#546e7a',
+            }}>{p.name}</button>
+          ))}
+        </div>
+
+        <div style={{fontSize:11,fontWeight:700,color:'#78909c',marginBottom:6}}>勤務時間</div>
+        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+          <select value={s2t(modal.s)} onChange={e=>setModal(m=>({...m,s:t2s(e.target.value)}))}
+            style={{flex:1,padding:'10px 6px',border:'1.5px solid #cfd8dc',borderRadius:8,fontSize:isMb?15:13,outline:'none',fontFamily:"'JetBrains Mono',monospace",color:'#263238',background:'#fff'}}>
+            {TOPTS.map(t=><option key={t} value={t}>{t}</option>)}
+          </select>
+          <span style={{color:'#90a4ae',fontWeight:700,fontSize:18}}>〜</span>
+          <select value={s2t(modal.e)} onChange={e=>setModal(m=>({...m,e:t2s(e.target.value)}))}
+            style={{flex:1,padding:'10px 6px',border:'1.5px solid #cfd8dc',borderRadius:8,fontSize:isMb?15:13,outline:'none',fontFamily:"'JetBrains Mono',monospace",color:'#263238',background:'#fff'}}>
+            {TOPTS.map(t=><option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        {modal.e>modal.s&&(
+          <div style={{textAlign:'center',fontSize:14,color:'#1565c0',fontWeight:800,fontFamily:"'JetBrains Mono',monospace",marginBottom:12}}>
+            {s2t(modal.s)} 〜 {s2t(modal.e)} ／ {slotH(modal.s,modal.e).toFixed(1)}時間
+          </div>
+        )}
+
+        <div style={{fontSize:11,fontWeight:700,color:'#78909c',marginBottom:6}}>休憩時間</div>
+        <div style={{display:'flex',gap:5,marginBottom:20}}>
+          {[0,15,30,45,60].map(m=>(
+            <button key={m} onClick={()=>setModal(x=>({...x,brk:m}))} style={{
+              flex:1,padding:'8px 0',border:`1.5px solid ${modal.brk===m?'#1565c0':'#e0e0e0'}`,
+              borderRadius:7,cursor:'pointer',fontSize:isMb?13:12,fontWeight:600,
+              background:modal.brk===m?'#e3f2fd':'#fff',color:modal.brk===m?'#1565c0':'#78909c',
+            }}>{m}分</button>
+          ))}
+        </div>
+
+        <div style={{display:'flex',gap:8}}>
+          <button onClick={save} style={{flex:1,padding:isMb?14:12,background:'#1a237e',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:isMb?15:14,cursor:'pointer'}}>保存</button>
+          {modal.type==='edit'&&<button onClick={del} style={{padding:isMb?'14px 16px':'12px 14px',background:'#ffebee',color:'#c62828',border:'none',borderRadius:8,fontWeight:700,cursor:'pointer',fontSize:isMb?15:13}}>削除</button>}
+          <button onClick={()=>setModal(null)} style={{padding:isMb?'14px 16px':'12px 14px',background:'#f5f5f5',color:'#78909c',border:'none',borderRadius:8,fontWeight:700,cursor:'pointer'}}>戻る</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Shared helpers ── */
+const INP={width:'100%',padding:'8px 10px',border:'1.5px solid #ddd',borderRadius:7,fontSize:13,outline:'none',background:'#fff',color:'#263238'};
+const SEL={padding:'8px 6px',border:'1.5px solid #ddd',borderRadius:7,fontSize:13,outline:'none',background:'#fff',color:'#263238',width:'100%'};
+const bBtn=bg=>({padding:'8px 14px',background:bg,color:'#fff',border:'none',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700});
+function FG({label,children,style}){return<div style={{display:'flex',flexDirection:'column',gap:4,...style}}><label style={{fontSize:11,fontWeight:700,color:'#78909c'}}>{label}</label>{children}</div>;}
+function HBtn({onClick,children}){
+  return<button onClick={onClick}
+    onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.22)'}
+    onMouseLeave={e=>e.currentTarget.style.background='rgba(255,255,255,.12)'}
+    style={{padding:'5px 10px',border:'1px solid rgba(255,255,255,.2)',borderRadius:6,cursor:'pointer',fontSize:13,fontWeight:600,background:'rgba(255,255,255,.12)',color:'#fff',minWidth:28,display:'flex',alignItems:'center',justifyContent:'center'}}>
+    {children}
+  </button>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
