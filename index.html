@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
 <title>シフトスケジューラー</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -14,11 +14,11 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
-body{font-family:'Noto Sans JP',sans-serif;background:#eceff1;color:#263238;font-size:13px;-webkit-tap-highlight-color:transparent}
+body{font-family:'M PLUS Rounded 1c',sans-serif;background:#f0f4ff;color:#263238;font-size:14px;-webkit-tap-highlight-color:transparent}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:#eceff1}
 ::-webkit-scrollbar-thumb{background:#b0bec5;border-radius:4px}
-button,select,input,textarea{font-family:'Noto Sans JP',sans-serif}
+button,select,input,textarea{font-family:'M PLUS Rounded 1c',sans-serif}
 @keyframes pop{from{transform:scale(.93);opacity:0}to{transform:scale(1);opacity:1}}
 @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
 @media print{.no-print{display:none!important}body{overflow:visible}html,body{height:auto}}
@@ -410,7 +410,7 @@ function App(){
     a.download=`シフト_${sDk}.csv`;a.click();
   };
 
-  const shared={day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizHours,modal,setModal,drag,onMD,onMM,onMU,onTap,hCounts,posOf,monday,save,del,dims,isMb};
+  const shared={day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizHours,modal,setModal,drag,onMD,onMM,onMU,onTap,hCounts,counts,posOf,monday,save,del,dims,isMb};
 
   /* ── Not configured yet → show setup ── */
   if(!fbCfg) return <SetupScreen onDone={cfg=>{setFbCfg(cfg);setDbReady(false);loading.current=false;}}/>;
@@ -432,7 +432,7 @@ function App(){
 
       {/* ── HEADER ── */}
       <div className="no-print" style={{
-        background:'linear-gradient(90deg,#1a237e,#283593)',
+        background:'linear-gradient(90deg,#5c6bc0,#9575cd)',
         height:isMb?50:48,display:'flex',alignItems:'center',gap:8,
         padding:isMb?'0 12px':'0 14px',flexShrink:0,
         boxShadow:'0 2px 8px rgba(0,0,0,.3)',
@@ -442,10 +442,10 @@ function App(){
 
         {/* screen toggle — desktop only (mobile uses bottom nav) */}
         {!isMb&&(
-          <div style={{marginLeft:12,display:'flex',gap:2,background:'rgba(0,0,0,.25)',borderRadius:7,padding:2}}>
+          <div style={{marginLeft:12,display:'flex',gap:2,background:'rgba(0,0,0,.15)',borderRadius:20,padding:3}}>
             {[['gantt','📊 シフト表'],['admin','⚙️ 管理画面']].map(([id,label])=>(
-              <button key={id} onClick={()=>setScreen(id)} style={{padding:'4px 13px',border:'none',borderRadius:5,cursor:'pointer',fontSize:12,fontWeight:700,
-                background:screen===id?'#fff':'transparent',color:screen===id?'#1a237e':'rgba(255,255,255,.7)'}}>
+              <button key={id} onClick={()=>setScreen(id)} style={{padding:'4px 14px',border:'none',borderRadius:17,cursor:'pointer',fontSize:12,fontWeight:700,
+                background:screen===id?'#fff':'transparent',color:screen===id?'#7986cb':'rgba(255,255,255,.8)',transition:'all .15s'}}>
                 {label}
               </button>
             ))}
@@ -486,17 +486,17 @@ function App(){
       {isMb&&(
         <div className="no-print" style={{
           display:'flex',background:'#fff',
-          borderTop:'1px solid #e0e0e0',
+          borderTop:'1px solid #e8eaf6',
           flexShrink:0,
-          boxShadow:'0 -2px 12px rgba(0,0,0,.08)',
+          boxShadow:'0 -4px 16px rgba(100,120,200,.1)',
           paddingBottom:'env(safe-area-inset-bottom)',
         }}>
           {[['gantt','📊','シフト表'],['admin','⚙️','管理'],['deploy','🚀','Deploy']].map(([id,icon,label])=>(
             <button key={id} onClick={()=>id==='deploy'?setNtlModal(true):setScreen(id)} style={{
               flex:1,padding:'10px 0 8px',border:'none',background:'none',cursor:'pointer',
               display:'flex',flexDirection:'column',alignItems:'center',gap:2,
-              color:id==='deploy'?'#2e7d32':screen===id?'#1a237e':'#90a4ae',
-              borderTop:screen===id&&id!=='deploy'?'2.5px solid #1a237e':'2.5px solid transparent',
+              color:id==='deploy'?'#7986cb':screen===id?'#7986cb':'#90a4ae',
+              borderTop:screen===id&&id!=='deploy'?'2.5px solid #9575cd':'2.5px solid transparent',
               transition:'color .12s',
             }}>
               <span style={{fontSize:20,lineHeight:1}}>{icon}</span>
@@ -514,7 +514,7 @@ function App(){
 }
 
 /* ══════════════════════ GANTT SCREEN ══════════════════════ */
-function GanttScreen({day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizHours,modal,setModal,drag,onMD,onMM,onMU,onTap,hCounts,posOf,monday,save,del,dims,isMb,exportCSV}){
+function GanttScreen({day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizHours,modal,setModal,drag,onMD,onMM,onMU,onTap,hCounts,counts,posOf,monday,save,del,dims,isMb,exportCSV}){
   const {SW,NW,TW,RH}=dims;
   const HW=SW*SPH;
   const totW=NW+TSLOTS*SW+(isMb?0:TW);
@@ -528,11 +528,11 @@ function GanttScreen({day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizH
     <>
       {/* ── Day tabs ── */}
       <div className="no-print" style={{
-        background:'#fff',borderBottom:'1px solid #cfd8dc',
+        background:'#fff',borderBottom:'1px solid #dde3f5',
         display:'flex',alignItems:'stretch',
-        padding:isMb?'0 2px':'0 8px',
+        padding:isMb?'0 4px':'0 10px',
         flexShrink:0,overflowX:'auto',
-        boxShadow:'0 1px 3px rgba(0,0,0,.06)',
+        boxShadow:'0 2px 8px rgba(100,120,200,.08)',
         WebkitOverflowScrolling:'touch',
       }}>
         {weeks.map((d,i)=>{
@@ -542,8 +542,8 @@ function GanttScreen({day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizH
             <button key={i} onClick={()=>setDay(i)} style={{
               padding:isMb?'6px 10px':'6px 14px',border:'none',background:'none',cursor:'pointer',
               fontWeight:act?800:500,fontSize:isMb?12:13,
-              color:act?'#1a237e':sat?'#1565c0':sun?'#c62828':'#546e7a',
-              borderBottom:act?'3px solid #1a237e':'3px solid transparent',
+              color:act?'#5c6bc0':sat?'#1565c0':sun?'#e53935':'#546e7a',
+              borderBottom:act?'3px solid #7986cb':'3px solid transparent',
               display:'flex',flexDirection:'column',alignItems:'center',gap:1,
               position:'relative',flexShrink:0,
             }}>
@@ -704,13 +704,13 @@ function GanttScreen({day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizH
             const touchEnd=()=>onMU(s.id);
 
             return(
-              <div key={s.id} style={{display:'flex',borderBottom:'1px solid #eceff1',background:even?'#fff':'#f9fafb',height:RH}}>
+              <div key={s.id} style={{display:'flex',borderBottom:'1px solid #e8edf8',background:even?'#ffffff':'#f4f6ff',height:RH}}>
                 {/* Name */}
                 <div style={{width:NW,flexShrink:0,borderRight:'1px solid #cfd8dc',display:'flex',alignItems:'center',gap:isMb?4:6,padding:isMb?'0 4px':'0 6px 0 8px',overflow:'hidden',
                   cursor:isMb?'pointer':'default'}}
                   onClick={isMb?()=>onTap(s.id):undefined}
                 >
-                  <span style={{background:posOf(s.pid).color,color:'#fff',fontSize:isMb?8:9,fontWeight:800,padding:'1px 3px',borderRadius:3,flexShrink:0}}>{s.type}</span>
+                  <span style={{background:posOf(s.pid).color,color:'#fff',fontSize:isMb?8:9,fontWeight:800,padding:'2px 5px',borderRadius:8,flexShrink:0}}>{s.type}</span>
                   <span style={{fontSize:isMb?11:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.name}</span>
                   {pref&&!isMb&&(
                     <span style={{marginLeft:'auto',fontSize:9,color:pref.available?'#4caf50':'#ef5350',flexShrink:0,fontWeight:700}}>
@@ -784,7 +784,7 @@ function GanttScreen({day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizH
                   {dp&&(
                     <div style={{position:'absolute',zIndex:3,pointerEvents:'none',
                       left:Math.min(dp.s0,dp.s1)*SW,width:(Math.abs(dp.s1-dp.s0)+1)*SW,
-                      top:2,height:RH-4,background:'rgba(33,150,243,.15)',border:'2px dashed #2196f3',borderRadius:3}}/>
+                      top:2,height:RH-4,background:'rgba(33,150,243,.15)',border:'2px dashed #2196f3',borderRadius:8}}/>
                   )}
 
                   {/* Shift block */}
@@ -793,9 +793,9 @@ function GanttScreen({day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizH
                       onMouseDown={e=>e.stopPropagation()}
                       onClick={e=>{e.stopPropagation();setModal({type:'edit',sid:s.id,s:sh.s,e:sh.e,pid:sh.pid,brk:sh.brk||0,dk:sDk});}}
                       style={{position:'absolute',zIndex:4,left:sh.s*SW+1,width:(sh.e-sh.s)*SW-2,top:2,height:RH-4,
-                        background:posOf(sh.pid).color,borderRadius:3,cursor:'pointer',
+                        background:posOf(sh.pid).color,borderRadius:8,cursor:'pointer',
                         display:'flex',alignItems:'center',paddingLeft:4,overflow:'hidden',whiteSpace:'nowrap',
-                        boxShadow:'0 1px 4px rgba(0,0,0,.22)'}}
+                        boxShadow:'0 2px 8px rgba(0,0,0,.18)'}}
                       onMouseEnter={e=>e.currentTarget.style.filter='brightness(1.12)'}
                       onMouseLeave={e=>e.currentTarget.style.filter=''}
                     >
@@ -830,6 +830,7 @@ function GanttScreen({day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizH
             );
           })}
 
+          <StaffingBarChart {...{counts,positions,req,bizHours,day,NW,TW,SW,THRS,HW,TSLOTS,isMb,dims}}/>
           <WeeklyTotals {...{staff,shifts,monday,weeks,isMb,NW}}/>
           <div style={{height:20}}/>
         </div>
@@ -838,17 +839,122 @@ function GanttScreen({day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizH
   );
 }
 
+/* ── Staffing Bar Chart ── */
+function StaffingBarChart({counts,positions,req,bizHours,day,NW,TW,SW,THRS,HW,TSLOTS,isMb,dims}){
+  const CHART_H = isMb ? 56 : 72;
+  const BAR_PAD = 2;
+  const biz = bizHours?.[day]||{open:'00:00',close:'23:59',closed:false};
+  const bizOpen  = biz.closed ? null : t2s(biz.open);
+  const bizClose = biz.closed ? null : t2s(biz.close);
+  const totalReq = positions.reduce((s,p)=>s+(req[p.id]||0), 0);
+
+  // per-slot total count
+  const slotTotals = useMemo(()=>Array.from({length:TSLOTS},(_,i)=>counts[i]?._||0),[counts,TSLOTS]);
+
+  // per-hour max count
+  const hourTotals = useMemo(()=>Array.from({length:THRS},(_,hi)=>{
+    let max=0;
+    for(let i=hi*4;i<hi*4+4&&i<TSLOTS;i++) if(slotTotals[i]>max) max=slotTotals[i];
+    return max;
+  }),[slotTotals,THRS,TSLOTS]);
+
+  const maxVal = Math.max(totalReq+2, ...hourTotals, 1);
+
+  return(
+    <div style={{display:'flex',borderTop:'2px dashed #dde3f5',background:'#f8f9ff'}}>
+      {/* Label */}
+      <div style={{
+        width:NW, flexShrink:0, borderRight:'1px solid #dde3f5',
+        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+        padding:'0 4px', gap:2,
+      }}>
+        <span style={{fontSize:isMb?9:10, fontWeight:800, color:'#9575cd', letterSpacing:'0.02em'}}>👥</span>
+        <span style={{fontSize:isMb?8:10, fontWeight:800, color:'#9575cd', textAlign:'center', lineHeight:1.2}}>人数</span>
+        {totalReq>0&&<span style={{fontSize:isMb?7:9, color:'#b0bec5', fontWeight:700}}>基準{totalReq}</span>}
+      </div>
+
+      {/* Chart area */}
+      <div style={{width:THRS*HW, flexShrink:0, height:CHART_H, position:'relative', overflow:'hidden'}}>
+        {/* Required line */}
+        {totalReq>0&&(
+          <div style={{
+            position:'absolute', left:0, right:0,
+            bottom: (totalReq/maxVal)*(CHART_H-8)+4,
+            height:1.5, background:'rgba(150,120,200,.45)',
+            zIndex:5, pointerEvents:'none',
+          }}/>
+        )}
+
+        {Array.from({length:THRS},(_,hi)=>{
+          const slotStart = hi*4;
+          const outside = biz.closed||(bizOpen!==null&&(slotStart+4<=bizOpen||slotStart>=bizClose));
+          const count = hourTotals[hi];
+          const barH = outside ? 0 : Math.max(count>0?4:0, Math.round((count/maxVal)*(CHART_H-8)));
+
+          let barColor, textColor;
+          if(outside || count===0){
+            barColor='#e8edf5'; textColor='transparent';
+          } else if(totalReq===0){
+            barColor='#b0bec5'; textColor='#78909c';
+          } else if(count < totalReq){
+            barColor='linear-gradient(180deg,#ef9a9a,#e53935)'; textColor='#c62828';
+          } else if(count === totalReq){
+            barColor='linear-gradient(180deg,#cfd8dc,#90a4ae)'; textColor='#607d8b';
+          } else {
+            barColor='linear-gradient(180deg,#90caf9,#1e88e5)'; textColor='#1565c0';
+          }
+
+          return(
+            <div key={hi} style={{
+              position:'absolute', left:hi*HW+BAR_PAD, width:HW-BAR_PAD*2,
+              bottom:0, top:0,
+              display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-end',
+              borderLeft: hi>0?'1px solid rgba(200,210,240,.4)':'none',
+            }}>
+              {/* count label above bar */}
+              {!outside&&count>0&&(
+                <span style={{
+                  fontSize:isMb?8:9, fontWeight:800, color:textColor,
+                  marginBottom:1, lineHeight:1,
+                  fontFamily:"'JetBrains Mono',monospace",
+                }}>{count}</span>
+              )}
+              {/* bar */}
+              <div style={{
+                width:'72%', height: barH,
+                background: barColor,
+                borderRadius:'4px 4px 2px 2px',
+                marginBottom:3,
+                boxShadow: count>0&&!outside?'0 1px 4px rgba(0,0,0,.12)':'none',
+                transition:'height .25s ease',
+              }}/>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Totals column (desktop only) */}
+      {!isMb&&<div style={{width:TW, flexShrink:0, borderLeft:'1px solid #dde3f5',
+        display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:2}}>
+        <span style={{fontSize:10, color:'#9575cd', fontWeight:800}}>
+          {totalReq>0?`基準 ${totalReq}名`:'—'}
+        </span>
+      </div>}
+    </div>
+  );
+}
+
 /* ── Weekly Totals strip ── */
 function WeeklyTotals({staff,shifts,monday,weeks,isMb,NW}){
   return(
-    <div style={{display:'flex',minHeight:22,background:'#e8eaf6',borderTop:'2px solid #9fa8da',flexWrap:'wrap'}}>
+    <div style={{display:'flex',minHeight:22,background:'#ede7f6',borderTop:'2px solid #ce93d8',flexWrap:'wrap'}}>
       <div style={{width:NW,flexShrink:0,borderRight:'1px solid #9fa8da',padding:'4px 6px',display:'flex',alignItems:'center'}}>
-        <span style={{fontSize:9,fontWeight:700,color:'#3949ab'}}>今週累計</span>
+        <span style={{fontSize:9,fontWeight:700,color:'#9575cd'}}>今週累計</span>
       </div>
       <div style={{flex:1,padding:'4px 8px',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',overflow:'hidden'}}>
         {staff.map(s=>{
           const tot=wk(monday).reduce((sum,d)=>{const x=shifts[`${s.id}-${dk(d)}`];return x?sum+slotH(x.s,x.e):sum;},0);
-          return tot>0?<span key={s.id} style={{fontSize:10,color:'#3949ab',fontWeight:600,whiteSpace:'nowrap'}}>{s.name}:<strong style={{fontFamily:"'JetBrains Mono',monospace",marginLeft:2}}>{tot.toFixed(1)}h</strong></span>:null;
+          return tot>0?<span key={s.id} style={{fontSize:10,color:'#7986cb',fontWeight:600,whiteSpace:'nowrap'}}>{s.name}:<strong style={{fontFamily:"'JetBrains Mono',monospace",marginLeft:2}}>{tot.toFixed(1)}h</strong></span>:null;
         })}
       </div>
     </div>
@@ -865,8 +971,8 @@ function AdminScreen({positions,setPos,staff,setStaff,prefs,setPrefs,req,setReq,
           <button key={id} onClick={()=>setTab(id)} style={{
             padding:isMb?'10px 10px':'11px 18px',border:'none',background:'none',cursor:'pointer',
             fontSize:isMb?12:13,fontWeight:tab===id?800:500,
-            color:tab===id?'#1a237e':'#78909c',
-            borderBottom:tab===id?'2.5px solid #1a237e':'2.5px solid transparent',
+            color:tab===id?'#7986cb':'#78909c',
+            borderBottom:tab===id?'2.5px solid #9575cd':'2.5px solid transparent',
             marginBottom:-2,whiteSpace:'nowrap',
           }}>{label}</button>
         ))}
@@ -915,7 +1021,7 @@ function StaffAdmin({staff,setStaff,positions,posOf,setShifts,req,setReq,isMb,ty
   return(
     <div style={{maxWidth:900}}>
       {/* ── 区分管理 ── */}
-      <div style={{background:'#fff',borderRadius:10,border:'1px solid #e8eaed',padding:'14px 16px',marginBottom:18}}>
+      <div style={{background:'#fff',borderRadius:16,border:'1px solid #e8eaed',padding:'14px 16px',marginBottom:18}}>
         <div style={{fontWeight:700,fontSize:13,color:'#1a237e',marginBottom:10}}>🏷 区分の管理</div>
         <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
           {types.map(t=>(
@@ -965,19 +1071,19 @@ function StaffAdmin({staff,setStaff,positions,posOf,setShifts,req,setReq,isMb,ty
       {isMb?(
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
           {staff.map((s,si)=>(
-            <div key={s.id} style={{background:'#fff',borderRadius:10,border:'1px solid #e8eaed',padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}>
+            <div key={s.id} style={{background:'#fff',borderRadius:16,border:'1px solid #e8eaed',padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}>
               <div style={{width:38,height:38,borderRadius:'50%',background:'#1a237e',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:800,fontSize:15,flexShrink:0}}>
                 {s.name.trim()[0]}
               </div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontWeight:700,fontSize:14,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.name}</div>
                 <div style={{fontSize:11,color:'#90a4ae',marginTop:2}}>
-                  <span style={{background:'#eceff1',padding:'1px 7px',borderRadius:3,color:'#546e7a',fontWeight:600}}>{s.type}</span>
+                  <span style={{background:'#eceff1',padding:'1px 7px',borderRadius:10,color:'#546e7a',fontWeight:600}}>{s.type}</span>
                 </div>
               </div>
               <div style={{display:'flex',gap:5}}>
-                <button onClick={()=>openEdit(s)} style={{padding:'6px 12px',background:'#e3f2fd',color:'#1565c0',border:'none',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700}}>編集</button>
-                <button onClick={()=>del(s.id)} style={{padding:'6px 12px',background:'#ffebee',color:'#c62828',border:'none',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700}}>削除</button>
+                <button onClick={()=>openEdit(s)} style={{padding:'6px 12px',background:'#ede7f6',color:'#7986cb',border:'none',borderRadius:20,cursor:'pointer',fontSize:12,fontWeight:700}}>編集</button>
+                <button onClick={()=>del(s.id)} style={{padding:'6px 12px',background:'#fce4ec',color:'#e57373',border:'none',borderRadius:20,cursor:'pointer',fontSize:12,fontWeight:700}}>削除</button>
               </div>
             </div>
           ))}
@@ -1007,8 +1113,8 @@ function StaffAdmin({staff,setStaff,positions,posOf,setShifts,req,setReq,isMb,ty
                   </td>
                   <td style={{padding:'8px 12px'}}>
                     <div style={{display:'flex',gap:5}}>
-                      <button onClick={()=>openEdit(s)} style={{padding:'4px 11px',background:'#e3f2fd',color:'#1565c0',border:'none',borderRadius:5,cursor:'pointer',fontSize:11,fontWeight:700}}>編集</button>
-                      <button onClick={()=>del(s.id)} style={{padding:'4px 11px',background:'#ffebee',color:'#c62828',border:'none',borderRadius:5,cursor:'pointer',fontSize:11,fontWeight:700}}>削除</button>
+                      <button onClick={()=>openEdit(s)} style={{padding:'4px 11px',background:'#ede7f6',color:'#7986cb',border:'none',borderRadius:20,cursor:'pointer',fontSize:11,fontWeight:700}}>編集</button>
+                      <button onClick={()=>del(s.id)} style={{padding:'4px 11px',background:'#fce4ec',color:'#e57373',border:'none',borderRadius:20,cursor:'pointer',fontSize:11,fontWeight:700}}>削除</button>
                     </div>
                   </td>
                 </tr>
@@ -1083,26 +1189,26 @@ function PositionAdmin({positions,setPos,req,setReq,isMb}){
 
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {positions.map((p,pi)=>(
-          <div key={p.id} style={{background:'#fff',borderRadius:10,border:'1px solid #e8eaed',padding:'12px 14px',display:'flex',alignItems:'center',gap:12}}>
+          <div key={p.id} style={{background:'#fff',borderRadius:16,border:'1px solid #e8eaed',padding:'12px 14px',display:'flex',alignItems:'center',gap:12}}>
             <div style={{width:36,height:36,borderRadius:8,background:p.color,flexShrink:0,boxShadow:`0 2px 6px ${p.color}50`}}/>
             <div style={{flex:1}}>
               <div style={{fontWeight:700,fontSize:isMb?14:15}}>{p.name}</div>
               <div style={{fontSize:11,color:'#90a4ae',marginTop:2,display:'flex',alignItems:'center',gap:6}}>
-                <span style={{background:p.color,color:'#fff',padding:'1px 7px',borderRadius:4,fontWeight:700}}>{p.short}</span>
+                <span style={{background:p.color,color:'#fff',padding:'1px 7px',borderRadius:10,fontWeight:700}}>{p.short}</span>
               </div>
             </div>
             {/* required count */}
             <div style={{display:'flex',alignItems:'center',gap:6}}>
               <button onClick={()=>setReq(r=>({...r,[p.id]:Math.max(0,(r[p.id]||0)-1)}))}
-                style={{width:28,height:28,border:'1px solid #e0e0e0',borderRadius:6,cursor:'pointer',background:'#f5f5f5',fontWeight:700,fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
-              <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,fontSize:15,minWidth:22,textAlign:'center',color:'#1a237e'}}>{req[p.id]||0}</span>
+                style={{width:28,height:28,border:'none',borderRadius:14,cursor:'pointer',background:'#ede7f6',color:'#7986cb',fontWeight:700,fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
+              <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,fontSize:15,minWidth:22,textAlign:'center',color:'#5c6bc0'}}>{req[p.id]||0}</span>
               <button onClick={()=>setReq(r=>({...r,[p.id]:(r[p.id]||0)+1}))}
-                style={{width:28,height:28,border:'1px solid #e0e0e0',borderRadius:6,cursor:'pointer',background:'#f5f5f5',fontWeight:700,fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>＋</button>
+                style={{width:28,height:28,border:'none',borderRadius:14,cursor:'pointer',background:'#ede7f6',color:'#7986cb',fontWeight:700,fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>＋</button>
               <span style={{fontSize:11,color:'#90a4ae'}}>名</span>
             </div>
             <div style={{display:'flex',gap:5}}>
-              <button onClick={()=>openEdit(p)} style={{padding:'5px 11px',background:'#e3f2fd',color:'#1565c0',border:'none',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:700}}>編集</button>
-              <button onClick={()=>del(p.id)} style={{padding:'5px 11px',background:'#ffebee',color:'#c62828',border:'none',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:700}}>削除</button>
+              <button onClick={()=>openEdit(p)} style={{padding:'5px 11px',background:'#ede7f6',color:'#7986cb',border:'none',borderRadius:20,cursor:'pointer',fontSize:11,fontWeight:700}}>編集</button>
+              <button onClick={()=>del(p.id)} style={{padding:'5px 11px',background:'#fce4ec',color:'#e57373',border:'none',borderRadius:20,cursor:'pointer',fontSize:11,fontWeight:700}}>削除</button>
             </div>
           </div>
         ))}
@@ -1151,7 +1257,7 @@ function BizAdmin({bizHours,setBiz,isMb}){
           const sat=dow===5,sun=dow===6;
           return(
             <div key={dow} style={{
-              background:'#fff',borderRadius:10,
+              background:'#fff',borderRadius:16,
               border:`2px solid ${biz.closed?'#ffcdd2':'#e8eaf6'}`,
               padding:'12px 14px',
               display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',
@@ -1192,7 +1298,7 @@ function BizAdmin({bizHours,setBiz,isMb}){
 
               {/* Copy to all */}
               {!biz.closed&&(
-                <button onClick={()=>copyAll(dow)} style={{padding:'5px 10px',background:'#e8eaf6',color:'#3949ab',border:'none',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:700,flexShrink:0}}>
+                <button onClick={()=>copyAll(dow)} style={{padding:'5px 10px',background:'#ede7f6',color:'#7986cb',border:'none',borderRadius:20,cursor:'pointer',fontSize:11,fontWeight:700,flexShrink:0}}>
                   全曜日にコピー
                 </button>
               )}
@@ -1428,7 +1534,7 @@ function DeployModal({onClose,isMb}){
             <button onClick={handleDeploy} style={{
               width:'100%',padding:16,border:'none',borderRadius:10,cursor:'pointer',
               fontWeight:800,fontSize:16,
-              background:'linear-gradient(135deg,#1a237e,#1565c0)',
+              background:'linear-gradient(135deg,#7986cb,#9575cd)',
               color:'#fff',boxShadow:'0 4px 16px rgba(26,35,126,.35)',
               display:'flex',alignItems:'center',justifyContent:'center',gap:8,
             }}>
@@ -1499,7 +1605,7 @@ function ShiftModal({modal,setModal,positions,staff,save,del,isMb}){
           {positions.map(p=>(
             <button key={p.id} onClick={()=>setModal(m=>({...m,pid:p.id}))} style={{
               padding:'6px 11px',border:`2px solid ${modal.pid===p.id?p.color:'#e0e0e0'}`,
-              borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700,
+              borderRadius:20,cursor:'pointer',fontSize:12,fontWeight:700,
               background:modal.pid===p.id?p.color:'#fff',color:modal.pid===p.id?'#fff':'#546e7a',
             }}>{p.name}</button>
           ))}
@@ -1527,17 +1633,17 @@ function ShiftModal({modal,setModal,positions,staff,save,del,isMb}){
         <div style={{display:'flex',gap:5,marginBottom:20}}>
           {[0,15,30,45,60].map(m=>(
             <button key={m} onClick={()=>setModal(x=>({...x,brk:m}))} style={{
-              flex:1,padding:'8px 0',border:`1.5px solid ${modal.brk===m?'#1565c0':'#e0e0e0'}`,
-              borderRadius:7,cursor:'pointer',fontSize:isMb?13:12,fontWeight:600,
-              background:modal.brk===m?'#e3f2fd':'#fff',color:modal.brk===m?'#1565c0':'#78909c',
+              flex:1,padding:'8px 0',border:`1.5px solid ${modal.brk===m?'#7986cb':'#e0e0e0'}`,
+              borderRadius:20,cursor:'pointer',fontSize:isMb?13:12,fontWeight:600,
+              background:modal.brk===m?'#ede7f6':'#fff',color:modal.brk===m?'#5c6bc0':'#78909c',
             }}>{m}分</button>
           ))}
         </div>
 
         <div style={{display:'flex',gap:8}}>
-          <button onClick={save} style={{flex:1,padding:isMb?14:12,background:'#1a237e',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:isMb?15:14,cursor:'pointer'}}>保存</button>
-          {modal.type==='edit'&&<button onClick={del} style={{padding:isMb?'14px 16px':'12px 14px',background:'#ffebee',color:'#c62828',border:'none',borderRadius:8,fontWeight:700,cursor:'pointer',fontSize:isMb?15:13}}>削除</button>}
-          <button onClick={()=>setModal(null)} style={{padding:isMb?'14px 16px':'12px 14px',background:'#f5f5f5',color:'#78909c',border:'none',borderRadius:8,fontWeight:700,cursor:'pointer'}}>戻る</button>
+          <button onClick={save} style={{flex:1,padding:isMb?14:12,background:'linear-gradient(135deg,#5c6bc0,#9575cd)',color:'#fff',border:'none',borderRadius:20,fontWeight:700,fontSize:isMb?15:14,cursor:'pointer'}}>保存</button>
+          {modal.type==='edit'&&<button onClick={del} style={{padding:isMb?'14px 16px':'12px 14px',background:'#fce4ec',color:'#c62828',border:'none',borderRadius:20,fontWeight:700,cursor:'pointer',fontSize:isMb?15:13}}>削除</button>}
+          <button onClick={()=>setModal(null)} style={{padding:isMb?'14px 16px':'12px 14px',background:'#f5f5f5',color:'#78909c',border:'none',borderRadius:20,fontWeight:700,cursor:'pointer'}}>戻る</button>
         </div>
       </div>
     </div>
@@ -1547,13 +1653,13 @@ function ShiftModal({modal,setModal,positions,staff,save,del,isMb}){
 /* ── Shared helpers ── */
 const INP={width:'100%',padding:'8px 10px',border:'1.5px solid #ddd',borderRadius:7,fontSize:13,outline:'none',background:'#fff',color:'#263238'};
 const SEL={padding:'8px 6px',border:'1.5px solid #ddd',borderRadius:7,fontSize:13,outline:'none',background:'#fff',color:'#263238',width:'100%'};
-const bBtn=bg=>({padding:'8px 14px',background:bg,color:'#fff',border:'none',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700});
+const bBtn=bg=>({padding:'8px 16px',background:bg,color:'#fff',border:'none',borderRadius:20,cursor:'pointer',fontSize:12,fontWeight:700});
 function FG({label,children,style}){return<div style={{display:'flex',flexDirection:'column',gap:4,...style}}><label style={{fontSize:11,fontWeight:700,color:'#78909c'}}>{label}</label>{children}</div>;}
 function HBtn({onClick,children}){
   return<button onClick={onClick}
-    onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.22)'}
-    onMouseLeave={e=>e.currentTarget.style.background='rgba(255,255,255,.12)'}
-    style={{padding:'5px 10px',border:'1px solid rgba(255,255,255,.2)',borderRadius:6,cursor:'pointer',fontSize:13,fontWeight:600,background:'rgba(255,255,255,.12)',color:'#fff',minWidth:28,display:'flex',alignItems:'center',justifyContent:'center'}}>
+    onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.28)'}
+    onMouseLeave={e=>e.currentTarget.style.background='rgba(255,255,255,.15)'}
+    style={{padding:'5px 12px',border:'1px solid rgba(255,255,255,.25)',borderRadius:20,cursor:'pointer',fontSize:13,fontWeight:600,background:'rgba(255,255,255,.15)',color:'#fff',minWidth:28,display:'flex',alignItems:'center',justifyContent:'center',transition:'background .15s'}}>
     {children}
   </button>;
 }
