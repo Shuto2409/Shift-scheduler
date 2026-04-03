@@ -31,11 +31,11 @@ const {useState,useMemo,useRef,useCallback,useEffect} = React;
 
 /* ─── CONSTANTS ─────────────────────────────────────── */
 const HS=6,HE=23,THRS=HE-HS;
-const SPH=4,SM=15,TSLOTS=THRS*SPH;
+const SPH=6,SM=10,TSLOTS=THRS*SPH;
 // Desktop dims
-const D={SW:16,NW:160,TW:145,RH:28};
+const D={SW:11,NW:160,TW:145,RH:28};
 // Mobile dims
-const M={SW:13,NW:72,TW:0,RH:34};
+const M={SW:9,NW:72,TW:0,RH:34};
 
 const t2s=t=>{const[h,m]=t.split(':').map(Number);return(h-HS)*SPH+~~(m/SM);};
 const s2t=s=>{const m=HS*60+s*SM;return`${String(~~(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;};
@@ -537,8 +537,14 @@ function App(){
 function StaffRow({s,si,shList,prefs,sDk,drag,positions,posOf,biz,bizOpen,bizClose,onMD,onMM,onMU,onTap,setModal,dims,isMb,RH,NW,TW,SW,HW}){
   const barRef=useRef(null);
   const pref=prefs[`${s.id}-${sDk}`];
-  const prefStart=pref?.available?t2s(pref.from):null;
-  const prefEnd  =pref?.available?t2s(pref.to):null;
+  // Backwards compat: support old {from,to} and new {ranges:[{from,to}]}
+  const getPrefRanges=p=>{
+    if(!p?.available) return [];
+    if(p.ranges&&p.ranges.length) return p.ranges;
+    if(p.from) return [{from:p.from,to:p.to||p.from}];
+    return [];
+  };
+  const prefRanges=getPrefRanges(pref);
   const even=si%2===0;
   const dp=drag?.sid===s.id?drag:null;
   const totalH=shList.reduce((sum,sh)=>sum+slotH(sh.s,sh.e),0);
@@ -603,12 +609,20 @@ function StaffRow({s,si,shList,prefs,sDk,drag,positions,posOf,biz,bizOpen,bizClo
         {pref&&!pref.available&&(
           <div style={{position:'absolute',inset:0,background:'rgba(80,96,104,.52)',zIndex:1,pointerEvents:'none'}}/>
         )}
-        {pref?.available&&prefStart!==null&&prefEnd!==null&&(
-          <>
-            {prefStart>0&&<div style={{position:'absolute',left:0,width:prefStart*SW,top:0,bottom:0,background:'rgba(80,96,104,.52)',zIndex:1,pointerEvents:'none',borderRight:'2px solid rgba(80,96,104,.7)'}}/>}
-            {prefEnd<TSLOTS&&<div style={{position:'absolute',left:prefEnd*SW,width:(TSLOTS-prefEnd)*SW,top:0,bottom:0,background:'rgba(80,96,104,.52)',zIndex:1,pointerEvents:'none',borderLeft:'2px solid rgba(80,96,104,.7)'}}/>}
-          </>
-        )}
+        {pref?.available&&prefRanges.length>0&&(()=>{
+          // Compute blocked segments = complement of allowed ranges
+          const sorted=[...prefRanges].map(r=>[t2s(r.from),t2s(r.to)]).sort((a,b)=>a[0]-b[0]);
+          const blocked=[];let cur=0;
+          sorted.forEach(([s2,e2])=>{if(s2>cur)blocked.push([cur,s2]);cur=Math.max(cur,e2);});
+          if(cur<TSLOTS)blocked.push([cur,TSLOTS]);
+          return blocked.map(([bs,be],bi)=>(
+            <div key={bi} style={{position:'absolute',left:bs*SW,width:(be-bs)*SW,top:0,bottom:0,
+              background:'rgba(80,96,104,.45)',zIndex:1,pointerEvents:'none',
+              borderLeft:bs>0?'2px solid rgba(80,96,104,.6)':'none',
+              borderRight:be<TSLOTS?'2px solid rgba(80,96,104,.6)':'none',
+            }}/>
+          ));
+        })()}
 
         {/* Business hours overlay */}
         {biz.closed?(
@@ -639,29 +653,47 @@ function StaffRow({s,si,shList,prefs,sDk,drag,positions,posOf,biz,bizOpen,bizClo
             top:2,height:RH-4,background:'rgba(33,150,243,.15)',border:'2px dashed #2196f3',borderRadius:8}}/>
         )}
 
-        {/* Shift blocks — multiple per day */}
-        {shList.map((sh,idx)=>(
-          <div key={idx}
-            onMouseDown={e=>e.stopPropagation()}
-            onClick={e=>{e.stopPropagation();setModal({type:'edit',sid:s.id,s:sh.s,e:sh.e,pid:sh.pid,brk:sh.brk||0,dk:sDk,idx});}}
-            style={{position:'absolute',zIndex:4,
-              left:sh.s*SW+1,width:(sh.e-sh.s)*SW-2,
-              top:shList.length>1?(idx%2===0?1:RH/2):2,
-              height:shList.length>1?RH/2-2:RH-4,
-              background:posOf(sh.pid).color,borderRadius:6,cursor:'pointer',
-              display:'flex',alignItems:'center',paddingLeft:4,overflow:'hidden',whiteSpace:'nowrap',
-              boxShadow:'0 2px 8px rgba(0,0,0,.18)',opacity:.95,
-            }}
-            onMouseEnter={e=>e.currentTarget.style.filter='brightness(1.12)'}
-            onMouseLeave={e=>e.currentTarget.style.filter=''}
-          >
-            {(sh.e-sh.s)*SW>(isMb?30:45)&&(
-              <span style={{color:'#fff',fontSize:isMb?7:8,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",pointerEvents:'none'}}>
-                {isMb?`${s2t(sh.s)}-${s2t(sh.e)}`:`${posOf(sh.pid).short} ${s2t(sh.s)}〜${s2t(sh.e)}`}
-              </span>
-            )}
-          </div>
-        ))}
+        {/* Shift blocks — overlap-aware lane layout */}
+        {(()=>{
+          // Compute lane for each shift (greedy interval coloring)
+          const lanes=shList.map(()=>0);
+          shList.forEach((sh,i)=>{
+            const used=new Set();
+            for(let j=0;j<i;j++){
+              const o=shList[j];
+              if(sh.s<o.e&&o.s<sh.e) used.add(lanes[j]);
+            }
+            let lane=0; while(used.has(lane)) lane++;
+            lanes[i]=lane;
+          });
+          const totalLanes=lanes.length>0?Math.max(...lanes)+1:1;
+          return shList.map((sh,idx)=>{
+            const lane=lanes[idx];
+            const top=totalLanes>1?2+lane*Math.floor((RH-4)/totalLanes):2;
+            const height=totalLanes>1?Math.floor((RH-4)/totalLanes)-1:RH-4;
+            return(
+              <div key={idx}
+                onMouseDown={e=>e.stopPropagation()}
+                onClick={e=>{e.stopPropagation();setModal({type:'edit',sid:s.id,s:sh.s,e:sh.e,pid:sh.pid,brk:sh.brk||0,dk:sDk,idx});}}
+                style={{position:'absolute',zIndex:4,
+                  left:sh.s*SW+1,width:(sh.e-sh.s)*SW-2,
+                  top,height,
+                  background:posOf(sh.pid).color,borderRadius:6,cursor:'pointer',
+                  display:'flex',alignItems:'center',paddingLeft:4,overflow:'hidden',whiteSpace:'nowrap',
+                  boxShadow:'0 2px 8px rgba(0,0,0,.18)',opacity:.95,
+                }}
+                onMouseEnter={e=>e.currentTarget.style.filter='brightness(1.12)'}
+                onMouseLeave={e=>e.currentTarget.style.filter=''}
+              >
+                {(sh.e-sh.s)*SW>(isMb?30:45)&&(
+                  <span style={{color:'#fff',fontSize:isMb?7:8,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",pointerEvents:'none'}}>
+                    {isMb?`${s2t(sh.s)}-${s2t(sh.e)}`:`${posOf(sh.pid).short} ${s2t(sh.s)}〜${s2t(sh.e)}`}
+                  </span>
+                )}
+              </div>
+            );
+          });
+        })()}
 
         {shList.length===0&&!isMb&&(
           <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',paddingLeft:8,pointerEvents:'none',zIndex:2}}>
@@ -1348,19 +1380,45 @@ function PrefsAdmin({staff,prefs,setPrefs,posOf,isMb}){
   const s=staff.find(x=>x.id===selStaff);
   const prefWeek=useMemo(()=>wk(prefMon),[prefMon]);
 
-  const setPref=(sid,dateK,field,val)=>{
-    setPrefs(p=>{const key=`${sid}-${dateK}`;
-      return{...p,[key]:{...({available:true,from:'10:00',to:'18:00',...p[key]}),[field]:val}};
+  // Normalize pref to always use ranges array
+  const normPref=p=>{
+    if(!p)return null;
+    if(p.ranges) return p;
+    if(p.from) return {...p,ranges:[{from:p.from,to:p.to||p.from}]};
+    return {...p,ranges:[]};
+  };
+
+  const setAvailable=(sid,dateK,available)=>{
+    setPrefs(p=>{const key=`${sid}-${dateK}`;const cur=normPref(p[key])||{};
+      return{...p,[key]:{...cur,available,ranges:cur.ranges||[{from:'10:00',to:'18:00'}]}};
     });
   };
   const clearPref=(sid,dateK)=>{
     setPrefs(p=>{const n={...p};delete n[`${sid}-${dateK}`];return n;});
   };
+  const addRange=(sid,dateK)=>{
+    setPrefs(p=>{const key=`${sid}-${dateK}`;const cur=normPref(p[key])||{available:true,ranges:[]};
+      return{...p,[key]:{...cur,ranges:[...(cur.ranges||[]),{from:'10:00',to:'18:00'}]}};
+    });
+  };
+  const removeRange=(sid,dateK,idx)=>{
+    setPrefs(p=>{const key=`${sid}-${dateK}`;const cur=normPref(p[key]);if(!cur)return p;
+      const ranges=cur.ranges.filter((_,i)=>i!==idx);
+      if(ranges.length===0){const n={...p};delete n[key];return n;}
+      return{...p,[key]:{...cur,ranges}};
+    });
+  };
+  const setRange=(sid,dateK,idx,field,val)=>{
+    setPrefs(p=>{const key=`${sid}-${dateK}`;const cur=normPref(p[key]);if(!cur)return p;
+      const ranges=cur.ranges.map((r,i)=>i===idx?{...r,[field]:val}:r);
+      return{...p,[key]:{...cur,ranges}};
+    });
+  };
   const copyLast=()=>{
     if(!s)return;
     const lastMon=new Date(prefMon);lastMon.setDate(lastMon.getDate()-7);
     const lw=wk(lastMon);
-    setPrefs(p=>{const n={...p};prefWeek.forEach((d,i)=>{const tk=`${s.id}-${dk(d)}`,lk=`${s.id}-${dk(lw[i])}`;if(p[lk])n[tk]={...p[lk]};});return n;});
+    setPrefs(p=>{const n={...p};prefWeek.forEach((d,i)=>{const tk=`${s.id}-${dk(d)}`,lk=`${s.id}-${dk(lw[i])}`;if(p[lk])n[tk]={...normPref(p[lk])};});return n;});
   };
   const clearWk=()=>{
     if(!s||!confirm('この週の希望をすべてクリアしますか？'))return;
@@ -1371,8 +1429,8 @@ function PrefsAdmin({staff,prefs,setPrefs,posOf,isMb}){
 
   return(
     <div style={{maxWidth:860}}>
-      <h2 style={{fontSize:isMb?15:17,fontWeight:800,color:'#1a237e',marginBottom:4}}>📅 希望シフト管理</h2>
-      <p style={{fontSize:12,color:'#78909c',marginBottom:16}}>スタッフと週を選んで希望時間を設定します。</p>
+      <h2 style={{fontSize:isMb?15:17,fontWeight:800,color:'#7986cb',marginBottom:4}}>📅 希望シフト管理</h2>
+      <p style={{fontSize:12,color:'#78909c',marginBottom:16}}>スタッフと週を選んで希望時間を設定します。複数の時間帯を追加できます。</p>
 
       {/* Staff pills */}
       <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14}}>
@@ -1420,66 +1478,65 @@ function PrefsAdmin({staff,prefs,setPrefs,posOf,isMb}){
             </div>
           </div>
 
-          {/* Day grid — 1 col on mobile, 7 col on desktop */}
+          {/* Day grid */}
           <div style={{padding:12}}>
-            <div style={{
-              display:'grid',
-              gridTemplateColumns:isMb?'1fr':'repeat(7,1fr)',
-              gap:8,
-            }}>
+            <div style={{display:'grid',gridTemplateColumns:isMb?'1fr':'repeat(7,1fr)',gap:8}}>
               {prefWeek.map((d,i)=>{
                 const dateK=dk(d);
-                const pref=prefs[`${s.id}-${dateK}`];
+                const rawPref=prefs[`${s.id}-${dateK}`];
+                const pref=normPref(rawPref);
+                const ranges=pref?.ranges||[];
                 const sat=i===5,sun=i===6;
                 const border=pref?.available===false?'#ffcdd2':pref?.available===true?'#c8e6c9':'#e8eaed';
                 const bg    =pref?.available===false?'#fff5f5':pref?.available===true?'#f6fff6':'#fafafa';
                 return(
-                  <div key={dateK} style={{border:`2px solid ${border}`,borderRadius:10,padding:isMb?'10px 12px':'10px 8px',background:bg}}>
-                    {/* Day label */}
-                    {isMb?(
-                      /* Mobile: horizontal layout */
-                      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:pref?.available===true?10:6}}>
-                        <div style={{display:'flex',alignItems:'baseline',gap:5}}>
-                          <span style={{fontWeight:900,fontSize:20,color:sat?'#1565c0':sun?'#c62828':'#263238'}}>{JA[i]}</span>
-                          <span style={{fontSize:11,color:'#90a4ae',fontFamily:"'JetBrains Mono',monospace"}}>{d.getMonth()+1}/{d.getDate()}</span>
-                        </div>
-                        <div style={{display:'flex',gap:5,flex:1,justifyContent:'flex-end'}}>
-                          <button onClick={()=>setPref(s.id,dateK,'available',true)} style={{padding:'5px 12px',border:`1.5px solid ${pref?.available===true?'#43a047':'#e0e0e0'}`,borderRadius:6,cursor:'pointer',fontSize:12,fontWeight:700,background:pref?.available===true?'#e8f5e9':'#fff',color:pref?.available===true?'#2e7d32':'#90a4ae'}}>○ 出勤可</button>
-                          <button onClick={()=>setPref(s.id,dateK,'available',false)} style={{padding:'5px 12px',border:`1.5px solid ${pref?.available===false?'#ef5350':'#e0e0e0'}`,borderRadius:6,cursor:'pointer',fontSize:12,fontWeight:700,background:pref?.available===false?'#ffebee':'#fff',color:pref?.available===false?'#c62828':'#90a4ae'}}>✕ 休み</button>
-                          {pref&&<button onClick={()=>clearPref(s.id,dateK)} style={{padding:'5px 8px',border:'1px solid #e0e0e0',borderRadius:6,cursor:'pointer',fontSize:11,background:'#fff',color:'#b0bec5'}}>✕</button>}
-                        </div>
+                  <div key={dateK} style={{border:`2px solid ${border}`,borderRadius:10,padding:'10px 8px',background:bg,minHeight:80}}>
+                    {/* Day label + buttons */}
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,flexWrap:'wrap',gap:4}}>
+                      <div>
+                        <span style={{fontWeight:900,fontSize:isMb?18:16,color:sat?'#1565c0':sun?'#c62828':'#263238'}}>{JA[i]}</span>
+                        <span style={{fontSize:10,color:'#90a4ae',fontFamily:"'JetBrains Mono',monospace",marginLeft:4}}>{d.getMonth()+1}/{d.getDate()}</span>
                       </div>
-                    ):(
-                      /* Desktop: vertical layout */
-                      <>
-                        <div style={{textAlign:'center',marginBottom:8}}>
-                          <div style={{fontWeight:900,fontSize:20,lineHeight:1,color:sat?'#1565c0':sun?'#c62828':'#263238'}}>{JA[i]}</div>
-                          <div style={{fontSize:10,color:'#90a4ae',fontFamily:"'JetBrains Mono',monospace",marginTop:2}}>{d.getMonth()+1}/{d.getDate()}</div>
-                        </div>
-                        <div style={{display:'flex',flexDirection:'column',gap:4,marginBottom:8}}>
-                          <button onClick={()=>setPref(s.id,dateK,'available',true)} style={{padding:'5px 0',border:`1.5px solid ${pref?.available===true?'#43a047':'#e0e0e0'}`,borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:700,background:pref?.available===true?'#e8f5e9':'#fff',color:pref?.available===true?'#2e7d32':'#90a4ae'}}>○ 出勤可</button>
-                          <button onClick={()=>setPref(s.id,dateK,'available',false)} style={{padding:'5px 0',border:`1.5px solid ${pref?.available===false?'#ef5350':'#e0e0e0'}`,borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:700,background:pref?.available===false?'#ffebee':'#fff',color:pref?.available===false?'#c62828':'#90a4ae'}}>✕ 休み</button>
-                          {pref&&<button onClick={()=>clearPref(s.id,dateK)} style={{padding:'3px 0',border:'1px solid #e8eaed',borderRadius:5,cursor:'pointer',fontSize:10,background:'#fff',color:'#b0bec5'}}>クリア</button>}
-                        </div>
-                      </>
-                    )}
+                      <div style={{display:'flex',gap:3}}>
+                        <button onClick={()=>setAvailable(s.id,dateK,true)} style={{padding:'3px 7px',border:`1.5px solid ${pref?.available===true?'#43a047':'#e0e0e0'}`,borderRadius:10,cursor:'pointer',fontSize:10,fontWeight:700,background:pref?.available===true?'#e8f5e9':'#fff',color:pref?.available===true?'#2e7d32':'#90a4ae'}}>○</button>
+                        <button onClick={()=>setAvailable(s.id,dateK,false)} style={{padding:'3px 7px',border:`1.5px solid ${pref?.available===false?'#ef5350':'#e0e0e0'}`,borderRadius:10,cursor:'pointer',fontSize:10,fontWeight:700,background:pref?.available===false?'#ffebee':'#fff',color:pref?.available===false?'#c62828':'#90a4ae'}}>✕</button>
+                        {pref&&<button onClick={()=>clearPref(s.id,dateK)} style={{padding:'3px 6px',border:'1px solid #e0e0e0',borderRadius:10,cursor:'pointer',fontSize:10,background:'#fff',color:'#b0bec5'}}>－</button>}
+                      </div>
+                    </div>
 
-                    {/* Time selects */}
+                    {/* Time ranges */}
                     {pref?.available===true&&(
-                      <div style={{display:'flex',alignItems:'center',gap:isMb?8:4,flexDirection:isMb?'row':'column'}}>
-                        <select value={pref.from||'10:00'} onChange={e=>setPref(s.id,dateK,'from',e.target.value)}
-                          style={{padding:'5px 4px',border:'1.5px solid #c8e6c9',borderRadius:6,fontSize:isMb?13:11,outline:'none',background:'#fff',color:'#263238',fontFamily:"'JetBrains Mono',monospace",flex:1,width:isMb?'auto':'100%'}}>
-                          {TOPTS.map(t=><option key={t} value={t}>{t}</option>)}
-                        </select>
-                        <span style={{color:'#90a4ae',fontWeight:700,fontSize:isMb?14:10}}>〜</span>
-                        <select value={pref.to||'18:00'} onChange={e=>setPref(s.id,dateK,'to',e.target.value)}
-                          style={{padding:'5px 4px',border:'1.5px solid #c8e6c9',borderRadius:6,fontSize:isMb?13:11,outline:'none',background:'#fff',color:'#263238',fontFamily:"'JetBrains Mono',monospace",flex:1,width:isMb?'auto':'100%'}}>
-                          {TOPTS.map(t=><option key={t} value={t}>{t}</option>)}
-                        </select>
-                        {pref.from&&pref.to&&(
-                          <span style={{fontSize:11,color:'#2e7d32',fontWeight:800,fontFamily:"'JetBrains Mono',monospace",background:'#e8f5e9',borderRadius:5,padding:'3px 6px',flexShrink:0}}>
-                            {slotH(t2s(pref.from),t2s(pref.to)).toFixed(1)}h
-                          </span>
+                      <div style={{display:'flex',flexDirection:'column',gap:5}}>
+                        {ranges.map((r,ri)=>(
+                          <div key={ri} style={{background:'#fff',borderRadius:8,padding:'6px 7px',border:'1.5px solid #c8e6c9',display:'flex',flexDirection:'column',gap:3}}>
+                            <div style={{display:'flex',alignItems:'center',gap:4,justifyContent:'space-between'}}>
+                              <span style={{fontSize:9,fontWeight:700,color:'#9575cd',background:'#f3e5f5',padding:'1px 5px',borderRadius:6}}>
+                                {ri===0?'1回目':ri===1?'2回目':'3回目'}
+                              </span>
+                              <button onClick={()=>removeRange(s.id,dateK,ri)} style={{width:16,height:16,border:'none',borderRadius:'50%',background:'#ffcdd2',color:'#c62828',cursor:'pointer',fontSize:10,fontWeight:900,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>×</button>
+                            </div>
+                            <div style={{display:'flex',alignItems:'center',gap:3}}>
+                              <select value={r.from||'10:00'} onChange={e=>setRange(s.id,dateK,ri,'from',e.target.value)}
+                                style={{flex:1,padding:'3px 2px',border:'1px solid #c8e6c9',borderRadius:5,fontSize:10,outline:'none',background:'#fff',color:'#263238',fontFamily:"'JetBrains Mono',monospace"}}>
+                                {TOPTS.map(t=><option key={t} value={t}>{t}</option>)}
+                              </select>
+                              <span style={{color:'#90a4ae',fontWeight:700,fontSize:10}}>〜</span>
+                              <select value={r.to||'18:00'} onChange={e=>setRange(s.id,dateK,ri,'to',e.target.value)}
+                                style={{flex:1,padding:'3px 2px',border:'1px solid #c8e6c9',borderRadius:5,fontSize:10,outline:'none',background:'#fff',color:'#263238',fontFamily:"'JetBrains Mono',monospace"}}>
+                                {TOPTS.map(t=><option key={t} value={t}>{t}</option>)}
+                              </select>
+                            </div>
+                            {r.from&&r.to&&t2s(r.to)>t2s(r.from)&&(
+                              <div style={{textAlign:'right',fontSize:9,color:'#2e7d32',fontWeight:800,fontFamily:"'JetBrains Mono',monospace"}}>
+                                {slotH(t2s(r.from),t2s(r.to)).toFixed(1)}h
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {ranges.length<3&&(
+                          <button onClick={()=>addRange(s.id,dateK)} style={{padding:'5px 0',background:'#f3e5f5',color:'#9575cd',border:'1.5px dashed #ce93d8',borderRadius:8,cursor:'pointer',fontSize:10,fontWeight:700,textAlign:'center'}}>
+                            ＋ 時間帯を追加
+                          </button>
                         )}
                       </div>
                     )}
