@@ -513,6 +513,151 @@ function App(){
   );
 }
 
+/* ══════════════════════ STAFF ROW ══════════════════════ */
+function StaffRow({s,si,sh,prefs,sDk,drag,positions,posOf,biz,bizOpen,bizClose,onMD,onMM,onMU,onTap,setModal,dims,isMb,RH,NW,TW,SW,HW}){
+  const barRef=useRef(null);
+  const pref=prefs[`${s.id}-${sDk}`];
+  const prefStart=pref?.available?t2s(pref.from):null;
+  const prefEnd  =pref?.available?t2s(pref.to):null;
+  const even=si%2===0;
+  const dp=drag?.sid===s.id?drag:null;
+
+  const touchStart=e=>{
+    if(isMb){
+      const t=e.touches[0];
+      if(!barRef.current)return;
+      const started=onMD(s.id,t.clientX,barRef.current);
+      if(!started)e.preventDefault();
+    } else {
+      if(!barRef.current)return;
+      onMD(s.id,e.touches[0].clientX,barRef.current);
+    }
+  };
+  const touchMove=e=>{if(!barRef.current)return;onMM(s.id,e.touches[0].clientX,barRef.current);};
+  const touchEnd=()=>onMU(s.id);
+
+  return(
+    <div style={{display:'flex',borderBottom:'1px solid #e8edf8',background:even?'#ffffff':'#f4f6ff',height:RH}}>
+      {/* Name */}
+      <div style={{width:NW,flexShrink:0,borderRight:'1px solid #cfd8dc',display:'flex',alignItems:'center',gap:isMb?4:6,padding:isMb?'0 4px':'0 6px 0 8px',overflow:'hidden',cursor:isMb?'pointer':'default'}}
+        onClick={isMb?()=>onTap(s.id):undefined}>
+        <span style={{background:posOf(s.pid).color,color:'#fff',fontSize:isMb?8:9,fontWeight:800,padding:'2px 5px',borderRadius:8,flexShrink:0}}>{s.type}</span>
+        <span style={{fontSize:isMb?11:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.name}</span>
+        {pref&&!isMb&&(
+          <span style={{marginLeft:'auto',fontSize:9,color:pref.available?'#4caf50':'#ef5350',flexShrink:0,fontWeight:700}}>
+            {pref.available?'○':'✕'}
+          </span>
+        )}
+      </div>
+
+      {/* Bar area */}
+      <div ref={barRef}
+        style={{width:TSLOTS*SW,flexShrink:0,position:'relative',cursor:isMb?'pointer':'crosshair',userSelect:'none',touchAction:'pan-x'}}
+        onMouseDown={e=>{if(!barRef.current||isMb)return;onMD(s.id,e.clientX,barRef.current);}}
+        onMouseMove={e=>{if(!barRef.current||isMb)return;onMM(s.id,e.clientX,barRef.current);}}
+        onMouseUp={()=>{if(!isMb)onMU(s.id);}}
+        onTouchStart={touchStart}
+        onTouchMove={touchMove}
+        onTouchEnd={touchEnd}
+        onClick={isMb&&!drag?()=>onTap(s.id):undefined}
+      >
+        {/* Grid lines */}
+        {Array.from({length:THRS},(_,hi)=>(
+          <React.Fragment key={hi}>
+            <div style={{position:'absolute',left:hi*HW,top:0,bottom:0,width:1,background:'#cfd8dc'}}/>
+            {!isMb&&<>
+              <div style={{position:'absolute',left:hi*HW+HW/2,top:0,bottom:0,width:1,background:'#e8ecef'}}/>
+              <div style={{position:'absolute',left:hi*HW+HW/4,top:'35%',bottom:0,width:1,background:'#f3f5f7'}}/>
+              <div style={{position:'absolute',left:hi*HW+HW*3/4,top:'35%',bottom:0,width:1,background:'#f3f5f7'}}/>
+            </>}
+            {isMb&&<div style={{position:'absolute',left:hi*HW+HW/2,top:'30%',bottom:0,width:1,background:'#eef0f1'}}/>}
+          </React.Fragment>
+        ))}
+        <div style={{position:'absolute',right:0,top:0,bottom:0,width:1,background:'#cfd8dc'}}/>
+
+        {/* Pref overlays */}
+        {pref&&!pref.available&&(
+          <div style={{position:'absolute',inset:0,background:'rgba(80,96,104,.52)',zIndex:1,pointerEvents:'none'}}/>
+        )}
+        {pref?.available&&prefStart!==null&&prefEnd!==null&&(
+          <>
+            {prefStart>0&&<div style={{position:'absolute',left:0,width:prefStart*SW,top:0,bottom:0,background:'rgba(80,96,104,.52)',zIndex:1,pointerEvents:'none',borderRight:'2px solid rgba(80,96,104,.7)'}}/>}
+            {prefEnd<TSLOTS&&<div style={{position:'absolute',left:prefEnd*SW,width:(TSLOTS-prefEnd)*SW,top:0,bottom:0,background:'rgba(80,96,104,.52)',zIndex:1,pointerEvents:'none',borderLeft:'2px solid rgba(80,96,104,.7)'}}/>}
+          </>
+        )}
+
+        {/* Business hours overlay */}
+        {biz.closed?(
+          <div style={{position:'absolute',inset:0,zIndex:2,pointerEvents:'none',
+            background:'repeating-linear-gradient(135deg,rgba(55,71,79,.13) 0px,rgba(55,71,79,.13) 3px,transparent 3px,transparent 9px)',
+            borderTop:'2px solid rgba(198,40,40,.3)',borderBottom:'2px solid rgba(198,40,40,.3)'}}>
+            <span style={{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-50%)',fontSize:9,color:'#ef9a9a',fontWeight:700,whiteSpace:'nowrap',letterSpacing:.05}}>定休日</span>
+          </div>
+        ):(bizOpen!==null&&bizClose!==null)&&(
+          <>
+            {bizOpen>0&&(
+              <div style={{position:'absolute',left:0,width:bizOpen*SW,top:0,bottom:0,zIndex:2,pointerEvents:'none',
+                background:'repeating-linear-gradient(135deg,rgba(55,71,79,.16) 0px,rgba(55,71,79,.16) 3px,transparent 3px,transparent 9px)',
+                borderRight:'2px solid rgba(96,125,139,.5)'}}/>
+            )}
+            {bizClose<TSLOTS&&(
+              <div style={{position:'absolute',left:bizClose*SW,width:(TSLOTS-bizClose)*SW,top:0,bottom:0,zIndex:2,pointerEvents:'none',
+                background:'repeating-linear-gradient(135deg,rgba(55,71,79,.16) 0px,rgba(55,71,79,.16) 3px,transparent 3px,transparent 9px)',
+                borderLeft:'2px solid rgba(96,125,139,.5)'}}/>
+            )}
+          </>
+        )}
+
+        {/* Drag preview */}
+        {dp&&(
+          <div style={{position:'absolute',zIndex:3,pointerEvents:'none',
+            left:Math.min(dp.s0,dp.s1)*SW,width:(Math.abs(dp.s1-dp.s0)+1)*SW,
+            top:2,height:RH-4,background:'rgba(33,150,243,.15)',border:'2px dashed #2196f3',borderRadius:8}}/>
+        )}
+
+        {/* Shift block */}
+        {sh&&(
+          <div
+            onMouseDown={e=>e.stopPropagation()}
+            onClick={e=>{e.stopPropagation();setModal({type:'edit',sid:s.id,s:sh.s,e:sh.e,pid:sh.pid,brk:sh.brk||0,dk:sDk});}}
+            style={{position:'absolute',zIndex:4,left:sh.s*SW+1,width:(sh.e-sh.s)*SW-2,top:2,height:RH-4,
+              background:posOf(sh.pid).color,borderRadius:8,cursor:'pointer',
+              display:'flex',alignItems:'center',paddingLeft:4,overflow:'hidden',whiteSpace:'nowrap',
+              boxShadow:'0 2px 8px rgba(0,0,0,.18)'}}
+            onMouseEnter={e=>e.currentTarget.style.filter='brightness(1.12)'}
+            onMouseLeave={e=>e.currentTarget.style.filter=''}
+          >
+            {(sh.e-sh.s)*SW>(isMb?40:55)&&(
+              <span style={{color:'#fff',fontSize:isMb?8:9,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",pointerEvents:'none'}}>
+                {isMb?`${s2t(sh.s)}-${s2t(sh.e)}`:`${posOf(sh.pid).short} ${s2t(sh.s)}〜${s2t(sh.e)}`}
+              </span>
+            )}
+          </div>
+        )}
+        {!sh&&!isMb&&(
+          <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',paddingLeft:8,pointerEvents:'none',zIndex:2}}>
+            <span style={{fontSize:10,color:'#d0d8dc'}}>ドラッグでシフト追加</span>
+          </div>
+        )}
+      </div>
+
+      {/* Totals (desktop only) */}
+      {!isMb&&<div style={{width:TW,flexShrink:0,borderLeft:'1px solid #cfd8dc',display:'flex',alignItems:'center',justifyContent:'center',gap:3,padding:'0 6px',fontSize:11}}>
+        {sh?(
+          <>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",color:'#546e7a',fontSize:11}}>{s2t(sh.s)}</span>
+            <span style={{color:'#ccc'}}>〜</span>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",color:'#546e7a',fontSize:11}}>{s2t(sh.e)}</span>
+            <span style={{color:'#ddd',margin:'0 2px'}}>|</span>
+            <span style={{fontFamily:"'JetBrains Mono',monospace",color:'#7986cb',fontWeight:800,fontSize:12}}>{slotH(sh.s,sh.e).toFixed(1)}h</span>
+            {sh.brk>0&&<span style={{fontSize:9,color:'#90a4ae'}}>休{sh.brk}分</span>}
+          </>
+        ):<span style={{color:'#e0e0e0'}}>—</span>}
+      </div>}
+    </div>
+  );
+}
+
 /* ══════════════════════ GANTT SCREEN ══════════════════════ */
 function GanttScreen({day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizHours,modal,setModal,drag,onMD,onMM,onMU,onTap,hCounts,counts,posOf,monday,save,del,dims,isMb,exportCSV}){
   const {SW,NW,TW,RH}=dims;
@@ -675,160 +820,13 @@ function GanttScreen({day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizH
           </div>{/* /sticky */}
 
           {/* Staff rows */}
-          {staff.map((s,si)=>{
-            const sh=shifts[`${s.id}-${sDk}`];
-            const dp=drag?.sid===s.id?drag:null;
-            const barRef=useRef(null);
-            const pref=prefs[`${s.id}-${sDk}`];
-            const prefStart=pref?.available?t2s(pref.from):null;
-            const prefEnd  =pref?.available?t2s(pref.to):null;
-            const even=si%2===0;
-
-            /* touch handlers */
-            const touchStart=e=>{
-              if(isMb){
-                // mobile: long-press for drag, tap for modal
-                const t=e.touches[0];
-                if(!barRef.current)return;
-                const started=onMD(s.id,t.clientX,barRef.current);
-                if(!started)e.preventDefault();
-              } else {
-                if(!barRef.current)return;
-                onMD(s.id,e.touches[0].clientX,barRef.current);
-              }
-            };
-            const touchMove=e=>{
-              if(!barRef.current)return;
-              onMM(s.id,e.touches[0].clientX,barRef.current);
-            };
-            const touchEnd=()=>onMU(s.id);
-
-            return(
-              <div key={s.id} style={{display:'flex',borderBottom:'1px solid #e8edf8',background:even?'#ffffff':'#f4f6ff',height:RH}}>
-                {/* Name */}
-                <div style={{width:NW,flexShrink:0,borderRight:'1px solid #cfd8dc',display:'flex',alignItems:'center',gap:isMb?4:6,padding:isMb?'0 4px':'0 6px 0 8px',overflow:'hidden',
-                  cursor:isMb?'pointer':'default'}}
-                  onClick={isMb?()=>onTap(s.id):undefined}
-                >
-                  <span style={{background:posOf(s.pid).color,color:'#fff',fontSize:isMb?8:9,fontWeight:800,padding:'2px 5px',borderRadius:8,flexShrink:0}}>{s.type}</span>
-                  <span style={{fontSize:isMb?11:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.name}</span>
-                  {pref&&!isMb&&(
-                    <span style={{marginLeft:'auto',fontSize:9,color:pref.available?'#4caf50':'#ef5350',flexShrink:0,fontWeight:700}}>
-                      {pref.available?'○':'✕'}
-                    </span>
-                  )}
-                </div>
-
-                {/* Bar area */}
-                <div ref={barRef}
-                  style={{width:TSLOTS*SW,flexShrink:0,position:'relative',cursor:isMb?'pointer':'crosshair',userSelect:'none',touchAction:'pan-x'}}
-                  onMouseDown={e=>{if(!barRef.current||isMb)return;onMD(s.id,e.clientX,barRef.current);}}
-                  onMouseMove={e=>{if(!barRef.current||isMb)return;onMM(s.id,e.clientX,barRef.current);}}
-                  onMouseUp={()=>{if(!isMb)onMU(s.id);}}
-                  onTouchStart={touchStart}
-                  onTouchMove={touchMove}
-                  onTouchEnd={touchEnd}
-                  onClick={isMb&&!drag?()=>onTap(s.id):undefined}
-                >
-                  {/* Grid lines */}
-                  {Array.from({length:THRS},(_,hi)=>(
-                    <React.Fragment key={hi}>
-                      <div style={{position:'absolute',left:hi*HW,top:0,bottom:0,width:1,background:'#cfd8dc'}}/>
-                      {!isMb&&<>
-                        <div style={{position:'absolute',left:hi*HW+HW/2,top:0,bottom:0,width:1,background:'#e8ecef'}}/>
-                        <div style={{position:'absolute',left:hi*HW+HW/4,top:'35%',bottom:0,width:1,background:'#f3f5f7'}}/>
-                        <div style={{position:'absolute',left:hi*HW+HW*3/4,top:'35%',bottom:0,width:1,background:'#f3f5f7'}}/>
-                      </>}
-                      {isMb&&<div style={{position:'absolute',left:hi*HW+HW/2,top:'30%',bottom:0,width:1,background:'#eef0f1'}}/>}
-                    </React.Fragment>
-                  ))}
-                  <div style={{position:'absolute',right:0,top:0,bottom:0,width:1,background:'#cfd8dc'}}/>
-
-                  {/* Pref overlays */}
-                  {pref&&!pref.available&&(
-                    <div style={{position:'absolute',inset:0,background:'rgba(80,96,104,.52)',zIndex:1,pointerEvents:'none'}}/>
-                  )}
-                  {pref?.available&&prefStart!==null&&prefEnd!==null&&(
-                    <>
-                      {prefStart>0&&<div style={{position:'absolute',left:0,width:prefStart*SW,top:0,bottom:0,background:'rgba(80,96,104,.52)',zIndex:1,pointerEvents:'none',borderRight:'2px solid rgba(80,96,104,.7)'}}/>}
-                      {prefEnd<TSLOTS&&<div style={{position:'absolute',left:prefEnd*SW,width:(TSLOTS-prefEnd)*SW,top:0,bottom:0,background:'rgba(80,96,104,.52)',zIndex:1,pointerEvents:'none',borderLeft:'2px solid rgba(80,96,104,.7)'}}/>}
-                    </>
-                  )}
-
-                  {/* ── Business hours overlay (hatch outside open hours) ── */}
-                  {biz.closed?(
-                    /* 定休日: 全体に斜線 */
-                    <div style={{position:'absolute',inset:0,zIndex:2,pointerEvents:'none',
-                      background:'repeating-linear-gradient(135deg,rgba(55,71,79,.13) 0px,rgba(55,71,79,.13) 3px,transparent 3px,transparent 9px)',
-                      borderTop:'2px solid rgba(198,40,40,.3)',borderBottom:'2px solid rgba(198,40,40,.3)'}}>
-                      <span style={{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-50%)',fontSize:9,color:'#ef9a9a',fontWeight:700,whiteSpace:'nowrap',letterSpacing:.05}}>定休日</span>
-                    </div>
-                  ):(bizOpen!==null&&bizClose!==null)&&(
-                    <>
-                      {/* before open */}
-                      {bizOpen>0&&(
-                        <div style={{position:'absolute',left:0,width:bizOpen*SW,top:0,bottom:0,zIndex:2,pointerEvents:'none',
-                          background:'repeating-linear-gradient(135deg,rgba(55,71,79,.16) 0px,rgba(55,71,79,.16) 3px,transparent 3px,transparent 9px)',
-                          borderRight:'2px solid rgba(96,125,139,.5)'}}/>
-                      )}
-                      {/* after close */}
-                      {bizClose<TSLOTS&&(
-                        <div style={{position:'absolute',left:bizClose*SW,width:(TSLOTS-bizClose)*SW,top:0,bottom:0,zIndex:2,pointerEvents:'none',
-                          background:'repeating-linear-gradient(135deg,rgba(55,71,79,.16) 0px,rgba(55,71,79,.16) 3px,transparent 3px,transparent 9px)',
-                          borderLeft:'2px solid rgba(96,125,139,.5)'}}/>
-                      )}
-                    </>
-                  )}
-
-                  {/* Drag preview */}
-                  {dp&&(
-                    <div style={{position:'absolute',zIndex:3,pointerEvents:'none',
-                      left:Math.min(dp.s0,dp.s1)*SW,width:(Math.abs(dp.s1-dp.s0)+1)*SW,
-                      top:2,height:RH-4,background:'rgba(33,150,243,.15)',border:'2px dashed #2196f3',borderRadius:8}}/>
-                  )}
-
-                  {/* Shift block */}
-                  {sh&&(
-                    <div
-                      onMouseDown={e=>e.stopPropagation()}
-                      onClick={e=>{e.stopPropagation();setModal({type:'edit',sid:s.id,s:sh.s,e:sh.e,pid:sh.pid,brk:sh.brk||0,dk:sDk});}}
-                      style={{position:'absolute',zIndex:4,left:sh.s*SW+1,width:(sh.e-sh.s)*SW-2,top:2,height:RH-4,
-                        background:posOf(sh.pid).color,borderRadius:8,cursor:'pointer',
-                        display:'flex',alignItems:'center',paddingLeft:4,overflow:'hidden',whiteSpace:'nowrap',
-                        boxShadow:'0 2px 8px rgba(0,0,0,.18)'}}
-                      onMouseEnter={e=>e.currentTarget.style.filter='brightness(1.12)'}
-                      onMouseLeave={e=>e.currentTarget.style.filter=''}
-                    >
-                      {(sh.e-sh.s)*SW>(isMb?40:55)&&(
-                        <span style={{color:'#fff',fontSize:isMb?8:9,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",pointerEvents:'none'}}>
-                          {isMb?`${s2t(sh.s)}-${s2t(sh.e)}`:`${posOf(sh.pid).short} ${s2t(sh.s)}〜${s2t(sh.e)}`}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {!sh&&!isMb&&(
-                    <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',paddingLeft:8,pointerEvents:'none',zIndex:2}}>
-                      <span style={{fontSize:10,color:'#d0d8dc'}}>ドラッグでシフト追加</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Totals (desktop only) */}
-                {!isMb&&<div style={{width:TW,flexShrink:0,borderLeft:'1px solid #cfd8dc',display:'flex',alignItems:'center',justifyContent:'center',gap:3,padding:'0 6px',fontSize:11}}>
-                  {sh?(
-                    <>
-                      <span style={{fontFamily:"'JetBrains Mono',monospace",color:'#546e7a',fontSize:11}}>{s2t(sh.s)}</span>
-                      <span style={{color:'#ccc'}}>〜</span>
-                      <span style={{fontFamily:"'JetBrains Mono',monospace",color:'#546e7a',fontSize:11}}>{s2t(sh.e)}</span>
-                      <span style={{color:'#ddd',margin:'0 2px'}}>|</span>
-                      <span style={{fontFamily:"'JetBrains Mono',monospace",color:'#1565c0',fontWeight:800,fontSize:12}}>{slotH(sh.s,sh.e).toFixed(1)}h</span>
-                      {sh.brk>0&&<span style={{fontSize:9,color:'#90a4ae'}}>休{sh.brk}分</span>}
-                    </>
-                  ):<span style={{color:'#e0e0e0'}}>—</span>}
-                </div>}
-              </div>
-            );
-          })}
+          {staff.map((s,si)=>(
+            <StaffRow key={s.id} s={s} si={si} sh={shifts[`${s.id}-${sDk}`]} prefs={prefs} sDk={sDk}
+              drag={drag} positions={positions} posOf={posOf} biz={biz} bizOpen={bizOpen} bizClose={bizClose}
+              onMD={onMD} onMM={onMM} onMU={onMU} onTap={onTap} setModal={setModal}
+              dims={dims} isMb={isMb} RH={RH} NW={NW} TW={TW} SW={SW} HW={HW}
+            />
+          ))}
 
           <StaffingBarChart {...{counts,positions,req,bizHours,day,NW,TW,SW,THRS,HW,TSLOTS,isMb,dims}}/>
           <WeeklyTotals {...{staff,shifts,monday,weeks,isMb,NW}}/>
