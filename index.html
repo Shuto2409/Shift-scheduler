@@ -327,8 +327,11 @@ function App(){
 
   const counts=useMemo(()=>{
     const c=Array.from({length:TSLOTS},()=>{const o={_:0};positions.forEach(p=>o[p.id]=0);return o;});
-    staff.forEach(s=>{const sh=shifts[`${s.id}-${sDk}`];if(!sh)return;
-      for(let i=sh.s;i<sh.e&&i<TSLOTS;i++){if(c[i][sh.pid]!==undefined)c[i][sh.pid]++;c[i]._++;}});
+    staff.forEach(s=>{
+      const raw=shifts[`${s.id}-${sDk}`];
+      const arr=Array.isArray(raw)?raw:(raw?[raw]:[]);
+      arr.forEach(sh=>{for(let i=sh.s;i<sh.e&&i<TSLOTS;i++){if(c[i][sh.pid]!==undefined)c[i][sh.pid]++;c[i]._++;}});
+    });
     return c;
   },[shifts,staff,sDk,positions]);
 
@@ -356,9 +359,10 @@ function App(){
   };
 
   const onMD=useCallback((sid,clientX,el)=>{
-    const sh=shifts[`${sid}-${sDk}`];
+    const raw=shifts[`${sid}-${sDk}`];
+    const arr=Array.isArray(raw)?raw:(raw?[raw]:[]);
     const slot=slotFromX(clientX,el);
-    if(sh&&slot>=sh.s&&slot<sh.e)return false;
+    if(arr.some(sh=>slot>=sh.s&&slot<sh.e))return false;
     dragR.current={sid,s0:slot,s1:slot};setDrag({sid,s0:slot,s1:slot});return true;
   },[shifts,sDk,dims]);
 
@@ -380,30 +384,46 @@ function App(){
     }
   },[sDk,staff,positions]);
 
-  /* mobile tap on empty row → open modal */
+  /* mobile tap on empty row → open add modal */
   const onTap=useCallback((sid)=>{
-    const sh=shifts[`${sid}-${sDk}`];
-    if(sh){setModal({type:'edit',sid,s:sh.s,e:sh.e,pid:sh.pid,brk:sh.brk||0,dk:sDk});return;}
     const defPid=staff.find(x=>x.id===sid)?.pid||positions[0]?.id;
     setModal({type:'add',sid,s:t2s('10:00'),e:t2s('18:00'),pid:defPid,brk:0,dk:sDk});
-  },[shifts,sDk,staff,positions]);
+  },[sDk,staff,positions]);
 
   const save=()=>{
     if(!modal)return;
     if(modal.e<=modal.s){alert('終了は開始より後にしてください');return;}
-    setShifts(p=>({...p,[`${modal.sid}-${modal.dk}`]:{s:modal.s,e:modal.e,pid:modal.pid,brk:modal.brk||0}}));
+    const key=`${modal.sid}-${modal.dk}`;
+    setShifts(p=>{
+      const arr=Array.isArray(p[key])?[...p[key]]:(p[key]?[p[key]]:[]);
+      const entry={s:modal.s,e:modal.e,pid:modal.pid,brk:modal.brk||0};
+      if(modal.type==='add') arr.push(entry);
+      else arr[modal.idx]=entry;
+      return{...p,[key]:arr};
+    });
     setModal(null);
   };
   const del=()=>{
     if(!modal)return;
-    setShifts(p=>{const n={...p};delete n[`${modal.sid}-${modal.dk}`];return n;});
+    const key=`${modal.sid}-${modal.dk}`;
+    setShifts(p=>{
+      const arr=Array.isArray(p[key])?[...p[key]]:(p[key]?[p[key]]:[]);
+      arr.splice(modal.idx,1);
+      const n={...p};
+      if(arr.length===0)delete n[key]; else n[key]=arr;
+      return n;
+    });
     setModal(null);
   };
 
   const exportCSV=()=>{
     const hdr=['スタッフ','区分','ポジション','出勤','退勤','日計(h)','休憩(分)'];
-    const rows=staff.map(s=>{const sh=shifts[`${s.id}-${sDk}`];
-      return[s.name,s.type,sh?posOf(sh.pid).name:'',sh?s2t(sh.s):'',sh?s2t(sh.e):'',sh?slotH(sh.s,sh.e).toFixed(1):'',sh?sh.brk:''];
+    const rows=[];
+    staff.forEach(s=>{
+      const raw=shifts[`${s.id}-${sDk}`];
+      const arr=Array.isArray(raw)?raw:(raw?[raw]:[]);
+      if(arr.length===0){rows.push([s.name,s.type,'','','','','']);}
+      else arr.forEach(sh=>rows.push([s.name,s.type,posOf(sh.pid).name,s2t(sh.s),s2t(sh.e),slotH(sh.s,sh.e).toFixed(1),sh.brk]));
     });
     const csv=[hdr,...rows].map(r=>r.join(',')).join('\n');
     const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv'}));
@@ -514,13 +534,14 @@ function App(){
 }
 
 /* ══════════════════════ STAFF ROW ══════════════════════ */
-function StaffRow({s,si,sh,prefs,sDk,drag,positions,posOf,biz,bizOpen,bizClose,onMD,onMM,onMU,onTap,setModal,dims,isMb,RH,NW,TW,SW,HW}){
+function StaffRow({s,si,shList,prefs,sDk,drag,positions,posOf,biz,bizOpen,bizClose,onMD,onMM,onMU,onTap,setModal,dims,isMb,RH,NW,TW,SW,HW}){
   const barRef=useRef(null);
   const pref=prefs[`${s.id}-${sDk}`];
   const prefStart=pref?.available?t2s(pref.from):null;
   const prefEnd  =pref?.available?t2s(pref.to):null;
   const even=si%2===0;
   const dp=drag?.sid===s.id?drag:null;
+  const totalH=shList.reduce((sum,sh)=>sum+slotH(sh.s,sh.e),0);
 
   const touchStart=e=>{
     if(isMb){
@@ -543,7 +564,10 @@ function StaffRow({s,si,sh,prefs,sDk,drag,positions,posOf,biz,bizOpen,bizClose,o
         onClick={isMb?()=>onTap(s.id):undefined}>
         <span style={{background:posOf(s.pid).color,color:'#fff',fontSize:isMb?8:9,fontWeight:800,padding:'2px 5px',borderRadius:8,flexShrink:0}}>{s.type}</span>
         <span style={{fontSize:isMb?11:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.name}</span>
-        {pref&&!isMb&&(
+        {shList.length>1&&(
+          <span style={{marginLeft:'auto',fontSize:8,background:'#7986cb',color:'#fff',borderRadius:8,padding:'1px 5px',flexShrink:0,fontWeight:800}}>{shList.length}回</span>
+        )}
+        {pref&&!isMb&&shList.length<=1&&(
           <span style={{marginLeft:'auto',fontSize:9,color:pref.available?'#4caf50':'#ef5350',flexShrink:0,fontWeight:700}}>
             {pref.available?'○':'✕'}
           </span>
@@ -615,26 +639,31 @@ function StaffRow({s,si,sh,prefs,sDk,drag,positions,posOf,biz,bizOpen,bizClose,o
             top:2,height:RH-4,background:'rgba(33,150,243,.15)',border:'2px dashed #2196f3',borderRadius:8}}/>
         )}
 
-        {/* Shift block */}
-        {sh&&(
-          <div
+        {/* Shift blocks — multiple per day */}
+        {shList.map((sh,idx)=>(
+          <div key={idx}
             onMouseDown={e=>e.stopPropagation()}
-            onClick={e=>{e.stopPropagation();setModal({type:'edit',sid:s.id,s:sh.s,e:sh.e,pid:sh.pid,brk:sh.brk||0,dk:sDk});}}
-            style={{position:'absolute',zIndex:4,left:sh.s*SW+1,width:(sh.e-sh.s)*SW-2,top:2,height:RH-4,
-              background:posOf(sh.pid).color,borderRadius:8,cursor:'pointer',
+            onClick={e=>{e.stopPropagation();setModal({type:'edit',sid:s.id,s:sh.s,e:sh.e,pid:sh.pid,brk:sh.brk||0,dk:sDk,idx});}}
+            style={{position:'absolute',zIndex:4,
+              left:sh.s*SW+1,width:(sh.e-sh.s)*SW-2,
+              top:shList.length>1?(idx%2===0?1:RH/2):2,
+              height:shList.length>1?RH/2-2:RH-4,
+              background:posOf(sh.pid).color,borderRadius:6,cursor:'pointer',
               display:'flex',alignItems:'center',paddingLeft:4,overflow:'hidden',whiteSpace:'nowrap',
-              boxShadow:'0 2px 8px rgba(0,0,0,.18)'}}
+              boxShadow:'0 2px 8px rgba(0,0,0,.18)',opacity:.95,
+            }}
             onMouseEnter={e=>e.currentTarget.style.filter='brightness(1.12)'}
             onMouseLeave={e=>e.currentTarget.style.filter=''}
           >
-            {(sh.e-sh.s)*SW>(isMb?40:55)&&(
-              <span style={{color:'#fff',fontSize:isMb?8:9,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",pointerEvents:'none'}}>
+            {(sh.e-sh.s)*SW>(isMb?30:45)&&(
+              <span style={{color:'#fff',fontSize:isMb?7:8,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",pointerEvents:'none'}}>
                 {isMb?`${s2t(sh.s)}-${s2t(sh.e)}`:`${posOf(sh.pid).short} ${s2t(sh.s)}〜${s2t(sh.e)}`}
               </span>
             )}
           </div>
-        )}
-        {!sh&&!isMb&&(
+        ))}
+
+        {shList.length===0&&!isMb&&(
           <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',paddingLeft:8,pointerEvents:'none',zIndex:2}}>
             <span style={{fontSize:10,color:'#d0d8dc'}}>ドラッグでシフト追加</span>
           </div>
@@ -643,15 +672,11 @@ function StaffRow({s,si,sh,prefs,sDk,drag,positions,posOf,biz,bizOpen,bizClose,o
 
       {/* Totals (desktop only) */}
       {!isMb&&<div style={{width:TW,flexShrink:0,borderLeft:'1px solid #cfd8dc',display:'flex',alignItems:'center',justifyContent:'center',gap:3,padding:'0 6px',fontSize:11}}>
-        {sh?(
-          <>
-            <span style={{fontFamily:"'JetBrains Mono',monospace",color:'#546e7a',fontSize:11}}>{s2t(sh.s)}</span>
-            <span style={{color:'#ccc'}}>〜</span>
-            <span style={{fontFamily:"'JetBrains Mono',monospace",color:'#546e7a',fontSize:11}}>{s2t(sh.e)}</span>
-            <span style={{color:'#ddd',margin:'0 2px'}}>|</span>
-            <span style={{fontFamily:"'JetBrains Mono',monospace",color:'#7986cb',fontWeight:800,fontSize:12}}>{slotH(sh.s,sh.e).toFixed(1)}h</span>
-            {sh.brk>0&&<span style={{fontSize:9,color:'#90a4ae'}}>休{sh.brk}分</span>}
-          </>
+        {shList.length>0?(
+          <span style={{fontFamily:"'JetBrains Mono',monospace",color:'#7986cb',fontWeight:800,fontSize:12}}>
+            {totalH.toFixed(1)}h
+            {shList.length>1&&<span style={{fontSize:9,color:'#9575cd',marginLeft:3}}>×{shList.length}</span>}
+          </span>
         ):<span style={{color:'#e0e0e0'}}>—</span>}
       </div>}
     </div>
@@ -681,7 +706,7 @@ function GanttScreen({day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizH
         WebkitOverflowScrolling:'touch',
       }}>
         {weeks.map((d,i)=>{
-          const hasSh=staff.some(s=>shifts[`${s.id}-${dk(d)}`]);
+          const hasSh=staff.some(s=>{const a=shifts[`${s.id}-${dk(d)}`];return Array.isArray(a)?a.length>0:!!a;});
           const sat=i===5,sun=i===6,act=day===i;
           return(
             <button key={i} onClick={()=>setDay(i)} style={{
@@ -780,7 +805,7 @@ function GanttScreen({day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizH
                     </div>
                     {!isMb&&<div style={{width:TW,flexShrink:0,borderLeft:'1px solid #37474f',display:'flex',alignItems:'center',justifyContent:'center'}}>
                       {(() => {
-                        const tot=staff.filter(s=>{const x=shifts[`${s.id}-${sDk}`];return x&&x.pid===p.id;}).length;
+                        const tot=staff.filter(s=>{const a=shifts[`${s.id}-${sDk}`];const arr=Array.isArray(a)?a:(a?[a]:[]);return arr.some(sh=>sh.pid===p.id);}).length;
                         const ok=reqN===0||tot>=reqN;
                         return <span style={{fontSize:9,fontWeight:800,color:ok?(tot>0?p.color:'#546e7a'):'#ff5252',fontFamily:"'JetBrains Mono',monospace"}}>
                           {tot>0?`${tot}名`:reqN>0?'0':'—'}{reqN>0&&` / ${reqN}`}
@@ -811,7 +836,7 @@ function GanttScreen({day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizH
                 </div>
                 {!isMb&&<div style={{width:TW,flexShrink:0,borderLeft:'1px solid #37474f',display:'flex',alignItems:'center',justifyContent:'center'}}>
                   <span style={{fontSize:9,fontWeight:800,color:'#b0bec5',fontFamily:"'JetBrains Mono',monospace"}}>
-                    {staff.filter(s=>shifts[`${s.id}-${sDk}`]).length}名出勤
+                    {staff.filter(s=>{const a=shifts[`${s.id}-${sDk}`];return Array.isArray(a)?a.length>0:!!a;}).length}名出勤
                   </span>
                 </div>}
               </div>
@@ -820,13 +845,17 @@ function GanttScreen({day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizH
           </div>{/* /sticky */}
 
           {/* Staff rows */}
-          {staff.map((s,si)=>(
-            <StaffRow key={s.id} s={s} si={si} sh={shifts[`${s.id}-${sDk}`]} prefs={prefs} sDk={sDk}
-              drag={drag} positions={positions} posOf={posOf} biz={biz} bizOpen={bizOpen} bizClose={bizClose}
-              onMD={onMD} onMM={onMM} onMU={onMU} onTap={onTap} setModal={setModal}
-              dims={dims} isMb={isMb} RH={RH} NW={NW} TW={TW} SW={SW} HW={HW}
-            />
-          ))}
+          {staff.map((s,si)=>{
+            const raw=shifts[`${s.id}-${sDk}`];
+            const shList=Array.isArray(raw)?raw:(raw?[raw]:[]);
+            return(
+              <StaffRow key={s.id} s={s} si={si} shList={shList} prefs={prefs} sDk={sDk}
+                drag={drag} positions={positions} posOf={posOf} biz={biz} bizOpen={bizOpen} bizClose={bizClose}
+                onMD={onMD} onMM={onMM} onMU={onMU} onTap={onTap} setModal={setModal}
+                dims={dims} isMb={isMb} RH={RH} NW={NW} TW={TW} SW={SW} HW={HW}
+              />
+            );
+          })}
 
           <StaffingBarChart {...{counts,positions,req,bizHours,day,NW,TW,SW,THRS,HW,TSLOTS,isMb,dims}}/>
           <WeeklyTotals {...{staff,shifts,monday,weeks,isMb,NW}}/>
@@ -951,7 +980,11 @@ function WeeklyTotals({staff,shifts,monday,weeks,isMb,NW}){
       </div>
       <div style={{flex:1,padding:'4px 8px',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',overflow:'hidden'}}>
         {staff.map(s=>{
-          const tot=wk(monday).reduce((sum,d)=>{const x=shifts[`${s.id}-${dk(d)}`];return x?sum+slotH(x.s,x.e):sum;},0);
+          const tot=wk(monday).reduce((sum,d)=>{
+            const raw=shifts[`${s.id}-${dk(d)}`];
+            const arr=Array.isArray(raw)?raw:(raw?[raw]:[]);
+            return sum+arr.reduce((s2,sh)=>s2+slotH(sh.s,sh.e),0);
+          },0);
           return tot>0?<span key={s.id} style={{fontSize:10,color:'#7986cb',fontWeight:600,whiteSpace:'nowrap'}}>{s.name}:<strong style={{fontFamily:"'JetBrains Mono',monospace",marginLeft:2}}>{tot.toFixed(1)}h</strong></span>:null;
         })}
       </div>
