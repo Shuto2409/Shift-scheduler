@@ -1479,8 +1479,8 @@ function PrefsAdmin({staff,prefs,setPrefs,posOf,isMb}){
           </div>
 
           {/* Day grid */}
-          <div style={{padding:12}}>
-            <div style={{display:'grid',gridTemplateColumns:isMb?'1fr':'repeat(7,1fr)',gap:8}}>
+          <div style={{padding:12,overflowX:'auto',WebkitOverflowScrolling:'touch'}}>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(7, minmax(148px, 1fr))',gap:8,minWidth:isMb?'1050px':'unset'}}>
               {prefWeek.map((d,i)=>{
                 const dateK=dk(d);
                 const rawPref=prefs[`${s.id}-${dateK}`];
@@ -1494,7 +1494,7 @@ function PrefsAdmin({staff,prefs,setPrefs,posOf,isMb}){
                     {/* Day label + buttons */}
                     <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,flexWrap:'wrap',gap:4}}>
                       <div>
-                        <span style={{fontWeight:900,fontSize:isMb?18:16,color:sat?'#1565c0':sun?'#c62828':'#263238'}}>{JA[i]}</span>
+                        <span style={{fontWeight:900,fontSize:18,color:sat?'#1565c0':sun?'#c62828':'#263238'}}>{JA[i]}</span>
                         <span style={{fontSize:10,color:'#90a4ae',fontFamily:"'JetBrains Mono',monospace",marginLeft:4}}>{d.getMonth()+1}/{d.getDate()}</span>
                       </div>
                       <div style={{display:'flex',gap:3}}>
