@@ -1,1763 +1,867 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>シフトスケジューラー</title>
-<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;overflow:hidden}
-body{font-family:'M PLUS Rounded 1c',sans-serif;background:#f0f4ff;color:#263238;font-size:14px;-webkit-tap-highlight-color:transparent}
-::-webkit-scrollbar{width:4px;height:4px}
-::-webkit-scrollbar-track{background:#eceff1}
-::-webkit-scrollbar-thumb{background:#b0bec5;border-radius:4px}
-button,select,input,textarea{font-family:'M PLUS Rounded 1c',sans-serif}
-@keyframes pop{from{transform:scale(.93);opacity:0}to{transform:scale(1);opacity:1}}
-@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
-@media print{.no-print{display:none!important}body{overflow:visible}html,body{height:auto}}
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface2: #21262d;
+  --border: #30363d;
+  --border2: #1c2128;
+  --text: #e6edf3;
+  --text-muted: #7d8590;
+  --text-dim: #3d444d;
+  --accent: #7c3aed;
+  --accent-soft: rgba(124,58,237,.12);
+  --danger: #f85149;
+  --success: #3fb950;
+  --warning: #d29922;
+  --today-bg: rgba(124,58,237,.06);
+  --weekend-bg: rgba(255,255,255,.012);
+
+  --label-w: 144px;
+  --hour-w: 64px;
+  --day-w: calc(var(--hour-w) * 24);
+  --row-h: 46px;
+  --topbar-h: 54px;
+  --day-label-h: 30px;
+  --hour-label-h: 26px;
+  --time-h: calc(var(--day-label-h) + var(--hour-label-h));
+  --grade-h: 28px;
+  --daynav-h: 52px;
+
+  --g4: #a78bfa;
+  --g3: #34d399;
+  --g2: #60a5fa;
+  --g1: #fb923c;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, 'Segoe UI', 'Hiragino Sans', 'Yu Gothic UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── TOP BAR ── */
+#topbar {
+  height: var(--topbar-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  flex-shrink: 0;
+  z-index: 200;
+}
+#topbar h1 { font-size: .95rem; font-weight: 700; white-space: nowrap; letter-spacing: -.01em; }
+.tb-btn {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); padding: 5px 11px; border-radius: 7px;
+  cursor: pointer; font-size: .82rem; white-space: nowrap; font-weight: 500;
+}
+.tb-btn:hover { background: var(--border); }
+#week-range { font-size: .88rem; font-weight: 600; min-width: 160px; text-align: center; }
+.this-week-btn {
+  background: var(--accent-soft); border: 1px solid rgba(124,58,237,.4);
+  color: #a78bfa; padding: 5px 11px; border-radius: 7px;
+  cursor: pointer; font-size: .8rem; font-weight: 600; white-space: nowrap;
+}
+.this-week-btn:hover { background: rgba(124,58,237,.22); }
+.spacer { flex: 1; }
+.mode-toggle {
+  display: flex; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 2px; gap: 2px;
+}
+.mode-btn {
+  padding: 4px 11px; border-radius: 6px; border: none; cursor: pointer;
+  font-size: .8rem; font-weight: 700; background: transparent;
+  color: var(--text-muted); transition: all .15s; white-space: nowrap;
+}
+.mode-btn.active.m-confirmed { background: #1f6feb; color: #fff; }
+.mode-btn.active.m-desired   { background: #9e6a03; color: #fff; }
+.icon-btn {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); width: 34px; height: 34px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 1rem; flex-shrink: 0;
+}
+.icon-btn:hover { background: var(--border); }
+#sync-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.ok          { background: var(--success); }
+.error       { background: var(--danger); }
+.connecting  { background: var(--warning); animation: blink .9s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.15} }
+
+/* ── GANTT WRAPPER ── */
+#gantt-wrapper { flex: 1; overflow: auto; padding-bottom: var(--daynav-h); }
+
+/* ── GANTT ── */
+#gantt {
+  display: flex; flex-direction: column;
+  min-width: calc(var(--label-w) + var(--day-w) * 7);
+  position: relative;
+}
+
+/* ── TIME HEADER ── */
+#time-header {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; height: var(--time-h);
+  background: var(--bg); border-bottom: 2px solid var(--border);
+}
+.th-spacer {
+  width: var(--label-w); flex-shrink: 0;
+  position: sticky; left: 0; z-index: 60;
+  background: var(--bg); border-right: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 2px;
+}
+.th-spacer span { font-size: .68rem; color: var(--text-dim); }
+.th-day {
+  width: var(--day-w); flex-shrink: 0;
+  display: flex; flex-direction: column;
+  border-right: 2px solid var(--border);
+}
+.th-day.is-today .th-day-label { background: var(--accent-soft); }
+.th-day-label {
+  height: var(--day-label-h); display: flex; align-items: center;
+  padding: 0 10px; gap: 6px; border-bottom: 1px solid var(--border2);
+}
+.th-day-name { font-size: .85rem; font-weight: 700; }
+.th-day-date { font-size: .75rem; color: var(--text-muted); }
+.th-today-badge {
+  margin-left: auto; font-size: .67rem; font-weight: 700;
+  background: var(--accent); color: #fff;
+  border-radius: 4px; padding: 1px 5px;
+}
+.th-day.is-weekend .th-day-name { color: #60a5fa; }
+.th-day.is-weekend .th-day-date { color: #60a5fa; opacity: .7; }
+.th-day.is-sunday  .th-day-name { color: #f85149; }
+.th-hours { flex: 1; display: flex; }
+.th-hour {
+  width: var(--hour-w); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .68rem; color: var(--text-dim);
+  border-right: 1px solid var(--border2); user-select: none;
+}
+.th-hour.h0 { color: var(--text-muted); font-weight: 600; }
+
+/* ── GRADE GROUP ── */
+.grade-group { display: flex; flex-direction: column; }
+.grade-header {
+  position: sticky; top: var(--time-h); z-index: 40;
+  display: flex; height: var(--grade-h);
+  background: var(--surface);
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+}
+.grade-label {
+  width: var(--label-w); flex-shrink: 0;
+  position: sticky; left: 0; z-index: 45;
+  background: var(--surface); border-right: 2px solid var(--border);
+  display: flex; align-items: center; padding-left: 14px;
+  font-size: .73rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+}
+.grade-line-row { flex: 1; display: flex; align-items: center; }
+.grade-line { height: 2px; width: 100%; opacity: .2; margin: 0 10px; border-radius: 2px; }
+.g4 .grade-label { color: var(--g4); } .g4 .grade-line { background: var(--g4); }
+.g3 .grade-label { color: var(--g3); } .g3 .grade-line { background: var(--g3); }
+.g2 .grade-label { color: var(--g2); } .g2 .grade-line { background: var(--g2); }
+.g1 .grade-label { color: var(--g1); } .g1 .grade-line { background: var(--g1); }
+
+/* ── MEMBER ROW ── */
+.member-row { display: flex; height: var(--row-h); border-bottom: 1px solid var(--border2); }
+.member-row:last-child { border-bottom: 1px solid var(--border); }
+.member-label {
+  width: var(--label-w); flex-shrink: 0;
+  position: sticky; left: 0; z-index: 20;
+  background: var(--bg); border-right: 2px solid var(--border);
+  display: flex; align-items: center; gap: 8px; padding: 0 10px;
+  cursor: pointer; transition: background .12s; user-select: none;
+}
+.member-label:hover { background: var(--surface2); }
+.avatar {
+  width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .72rem; font-weight: 700; flex-shrink: 0; color: #0d1117;
+}
+.member-name { font-size: .82rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── ROW GRID ── */
+.row-grid { flex: 1; position: relative; display: flex; cursor: crosshair; overflow: hidden; }
+.day-col { width: var(--day-w); flex-shrink: 0; height: 100%; display: flex; border-right: 2px solid var(--border); }
+.day-col.is-today   { background: var(--today-bg); }
+.day-col.is-weekend { background: var(--weekend-bg); }
+.hour-cell { width: var(--hour-w); flex-shrink: 0; border-right: 1px solid var(--border2); }
+
+/* ── SHIFT BAR ── */
+.shift-bar {
+  position: absolute; top: 5px; height: calc(100% - 10px);
+  border-radius: 6px; display: flex; align-items: center;
+  padding: 0 7px; font-size: .71rem; font-weight: 600;
+  overflow: hidden; white-space: nowrap; cursor: pointer;
+  z-index: 5; color: #0d1117;
+  box-shadow: 0 1px 5px rgba(0,0,0,.4);
+  transition: opacity .12s, transform .1s;
+}
+.shift-bar:hover { opacity: .8; transform: scaleY(1.06); }
+.shift-bar.desired { opacity: .72; border: 2px dashed rgba(255,255,255,.5); }
+.shift-bar.desired::after {
+  content: ''; position: absolute; inset: 0; border-radius: 4px;
+  background: repeating-linear-gradient(-45deg,transparent 0,transparent 5px,rgba(0,0,0,.2) 5px,rgba(0,0,0,.2) 7px);
+  pointer-events: none;
+}
+.shift-time { font-size: .68rem; opacity: .8; }
+
+/* ── DRAG PREVIEW ── */
+.drag-preview {
+  position: absolute; top: 5px; height: calc(100% - 10px);
+  border-radius: 6px; pointer-events: none; z-index: 20;
+  opacity: .6; border: 2px dashed rgba(255,255,255,.6);
+  display: flex; align-items: center; padding: 0 7px;
+  font-size: .71rem; font-weight: 600; color: #0d1117;
+}
+
+/* ── NOW LINE ── */
+.now-line {
+  position: absolute; top: 0; bottom: 0; width: 2px;
+  background: var(--danger); z-index: 10; pointer-events: none;
+}
+.now-line::before {
+  content: ''; position: absolute; top: -1px; left: -4px;
+  width: 10px; height: 10px; background: var(--danger); border-radius: 50%;
+}
+
+/* ── DAY NAVIGATOR ── */
+#day-nav {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: var(--daynav-h); background: var(--surface);
+  border-top: 1px solid var(--border); display: flex; z-index: 150;
+}
+.dnav-btn {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 1px;
+  cursor: pointer; border: none; border-right: 1px solid var(--border2);
+  background: transparent; color: var(--text-muted);
+  transition: background .12s, color .12s; padding: 5px 2px;
+}
+.dnav-btn:last-child { border-right: none; }
+.dnav-btn:hover  { background: var(--surface2); }
+.dnav-btn.active { background: var(--accent-soft); color: #a78bfa; }
+.dnav-btn.is-today .dnav-dot { background: var(--accent); }
+.dnav-name { font-size: .82rem; font-weight: 700; }
+.dnav-date { font-size: .7rem; }
+.dnav-dot  { width: 4px; height: 4px; border-radius: 50%; }
+.dnav-btn.is-weekend .dnav-name { color: #60a5fa; }
+.dnav-btn.is-sunday  .dnav-name { color: #f85149; }
+.dnav-btn.active .dnav-name,
+.dnav-btn.active .dnav-date { color: #a78bfa; }
+
+/* ── MEMBER PANEL ── */
+#member-panel {
+  position: fixed; right: 0; top: var(--topbar-h); bottom: var(--daynav-h);
+  width: 256px; background: var(--surface); border-left: 1px solid var(--border);
+  display: flex; flex-direction: column; z-index: 100;
+  transform: translateX(100%); transition: transform .22s ease;
+}
+#member-panel.open { transform: translateX(0); }
+.mp-header {
+  padding: 13px 13px 11px; font-size: .92rem; font-weight: 700;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+#member-list { flex: 1; overflow-y: auto; padding: 9px; display: flex; flex-direction: column; gap: 5px; }
+.mc { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 9px 10px; display: flex; align-items: center; gap: 8px; }
+.mc-info { flex: 1; min-width: 0; }
+.mc-name  { font-size: .85rem; font-weight: 500; }
+.mc-grade { font-size: .73rem; color: var(--text-muted); }
+.small-btn {
+  width: 26px; height: 26px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface2);
+  color: var(--text); display: flex; align-items: center;
+  justify-content: center; cursor: pointer; font-size: .82rem; flex-shrink: 0;
+}
+.small-btn:hover { background: var(--border); }
+#add-member-btn {
+  margin: 9px; padding: 9px;
+  background: var(--accent-soft); border: 1px dashed rgba(124,58,237,.5);
+  border-radius: 9px; color: #a78bfa; cursor: pointer;
+  text-align: center; font-size: .86rem; font-weight: 600; flex-shrink: 0;
+}
+#add-member-btn:hover { background: rgba(124,58,237,.2); }
+
+/* ── MODALS ── */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75); display: flex; align-items: center; justify-content: center; z-index: 300; }
+.modal-overlay.hidden { display: none; }
+.modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px; width: min(380px, 94vw); box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+.modal-box h3 { font-size: .98rem; margin-bottom: 16px; }
+.form-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 11px; }
+.form-row label { font-size: .78rem; color: var(--text-muted); }
+.form-row input, .form-row select { background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; color: var(--text); font-size: .87rem; outline: none; width: 100%; }
+.form-row input:focus, .form-row select:focus { border-color: var(--accent); }
+.form-row input[type=color] { padding: 3px; height: 38px; cursor: pointer; }
+.modal-actions { display: flex; gap: 7px; margin-top: 16px; flex-wrap: wrap; }
+.btn { padding: 8px 15px; border-radius: 7px; border: none; cursor: pointer; font-size: .85rem; font-weight: 600; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { opacity: .9; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:hover { opacity: .9; }
+.btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-ghost:hover { background: var(--border); }
+
+/* ── SHIFT POPUP ── */
+#shift-popup { position: fixed; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; min-width: 220px; z-index: 250; box-shadow: 0 12px 40px rgba(0,0,0,.55); display: none; }
+#shift-popup.visible { display: block; }
+#shift-popup h4 { font-size: .9rem; margin-bottom: 3px; }
+.popup-meta { font-size: .78rem; color: var(--text-muted); margin-bottom: 10px; }
+.popup-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 11px; }
+
+/* ── TOAST ── */
+#toast { position: fixed; bottom: calc(var(--daynav-h) + 12px); left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--border); border-radius: 9px; padding: 8px 18px; font-size: .87rem; box-shadow: 0 8px 32px rgba(0,0,0,.45); z-index: 400; opacity: 0; transition: opacity .25s; pointer-events: none; white-space: nowrap; }
+#toast.show { opacity: 1; }
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 </style>
 </head>
 <body>
-<div id="root"></div>
-<script type="text/babel">
-const {useState,useMemo,useRef,useCallback,useEffect} = React;
 
-/* ─── CONSTANTS ─────────────────────────────────────── */
-const HS=6,HE=23,THRS=HE-HS;
-const SPH=6,SM=10,TSLOTS=THRS*SPH;
-// Desktop dims
-const D={SW:11,NW:160,TW:145,RH:28};
-// Mobile dims
-const M={SW:9,NW:72,TW:0,RH:34};
+<div id="topbar">
+  <h1>📅 シフトスケジューラー</h1>
+  <div id="sync-dot" class="connecting"></div>
+  <div class="spacer"></div>
+  <button class="tb-btn" onclick="prevWeek()">‹ 先週</button>
+  <span id="week-range"></span>
+  <button class="tb-btn" onclick="nextWeek()">翌週 ›</button>
+  <button class="this-week-btn" onclick="goThisWeek()">今週</button>
+  <div style="width:1px;height:24px;background:var(--border);margin:0 2px"></div>
+  <div class="mode-toggle">
+    <button class="mode-btn active m-confirmed" id="btn-confirmed" onclick="setMode('confirmed')">✓ 確定</button>
+    <button class="mode-btn m-desired" id="btn-desired" onclick="setMode('desired')">◎ 希望</button>
+  </div>
+  <button class="icon-btn" onclick="toggleMemberPanel()" title="メンバー管理">👥</button>
+</div>
 
-const t2s=t=>{const[h,m]=t.split(':').map(Number);return(h-HS)*SPH+~~(m/SM);};
-const s2t=s=>{const m=HS*60+s*SM;return`${String(~~(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;};
-const slotH=(a,b)=>+((b-a)*SM/60).toFixed(2);
-const mon0=d=>{const x=new Date(d);x.setHours(0,0,0,0);const w=x.getDay();x.setDate(x.getDate()-(w===0?6:w-1));return x;};
-const wk=m=>Array.from({length:7},(_,i)=>{const d=new Date(m);d.setDate(m.getDate()+i);return d;});
-const dk=d=>d.toISOString().split('T')[0];
-const JA=['月','火','水','木','金','土','日'];
-const TOPTS=Array.from({length:TSLOTS+1},(_,i)=>s2t(i));
-const PRESET_COLORS=['#e65100','#1565c0','#6a1b9a','#2e7d32','#00695c','#c62828','#4527a0','#00838f','#f57f17','#37474f'];
+<div id="gantt-wrapper">
+  <div id="gantt"></div>
+</div>
 
-/* ─── DEFAULT DATA ─────────────────────────────────── */
-const DEF_POS=[
-  {id:'counter',name:'カウンター',short:'カウ',color:'#e65100'},
-  {id:'kitchen',name:'キッチン',  short:'キッ',color:'#1565c0'},
-  {id:'drink',  name:'ドリンク',  short:'ドリ',color:'#6a1b9a'},
-  {id:'hall',   name:'ホール',    short:'ホール',color:'#2e7d32'},
-  {id:'clean',  name:'クリーナー',short:'クリ',color:'#00695c'},
-];
-const DEF_STAFF=[
-  {id:'1', name:'田中 太郎',  type:'P',  pid:'kitchen'},
-  {id:'2', name:'鈴木 花子',  type:'P',  pid:'counter'},
-  {id:'3', name:'山田 一郎',  type:'社', pid:'kitchen'},
-  {id:'4', name:'佐藤 美咲',  type:'P',  pid:'hall'},
-  {id:'5', name:'伊藤 健二',  type:'P',  pid:'drink'},
-  {id:'6', name:'渡辺 優子',  type:'P',  pid:'counter'},
-  {id:'7', name:'小林 大輔',  type:'P',  pid:'clean'},
-  {id:'8', name:'加藤さゆり', type:'P',  pid:'hall'},
-  {id:'9', name:'中村 翔太',  type:'社', pid:'kitchen'},
-  {id:'10',name:'林  ひろみ', type:'P',  pid:'drink'},
-];
+<div id="day-nav"></div>
 
-/* ─── FIREBASE CONFIG ───────────────────────────────── */
-const CFG_KEY='shift_fb_cfg';
-const NTL_KEY='shift_ntl_cfg';
-const loadCfg=()=>{try{const s=localStorage.getItem(CFG_KEY);return s?JSON.parse(s):null;}catch{return null;}};
-const saveCfg=cfg=>localStorage.setItem(CFG_KEY,JSON.stringify(cfg));
-const clearCfg=()=>localStorage.removeItem(CFG_KEY);
-const loadNtl=()=>{try{const s=localStorage.getItem(NTL_KEY);return s?JSON.parse(s):null;}catch{return null;}};
-const saveNtl=cfg=>localStorage.setItem(NTL_KEY,JSON.stringify(cfg));
+<div id="member-panel">
+  <div class="mp-header">
+    メンバー管理
+    <span class="small-btn" onclick="toggleMemberPanel()">✕</span>
+  </div>
+  <div id="member-list"></div>
+  <div id="add-member-btn" onclick="openAddMember()">＋ メンバーを追加</div>
+</div>
 
-async function deployToNetlify(token, siteId, onProgress){
-  // ① JSZip チェック
-  if(typeof JSZip === 'undefined') throw new Error('JSZipが読み込まれていません。インターネット接続を確認してください。');
-
-  onProgress('HTMLを取得中...');
-  const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-
-  onProgress('ZIPを作成中...');
-  const zip = new JSZip();
-  zip.file('index.html', html);
-  const blob = await zip.generateAsync({type:'blob', compression:'DEFLATE'});
-  onProgress(`ZIP完成 (${(blob.size/1024).toFixed(0)}KB) — Netlifyに接続中...`);
-
-  // ② サイト作成
-  let sid = siteId;
-  if(!sid){
-    onProgress('新しいサイトを作成中...');
-    let createRes;
-    try{
-      createRes = await fetch('https://api.netlify.com/api/v1/sites',{
-        method:'POST',
-        headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
-        body: JSON.stringify({name:'shift-scheduler-'+Math.random().toString(36).slice(2,8)}),
-      });
-    }catch(e){ throw new Error(`Netlify APIへの接続失敗: ${e.message} — トークンかネットワークを確認してください`); }
-    if(!createRes.ok){
-      const e=await createRes.json().catch(()=>({}));
-      throw new Error(`サイト作成失敗 (${createRes.status}): ${e.message||JSON.stringify(e)}`);
-    }
-    const site = await createRes.json();
-    sid = site.id;
-    saveNtl({token, siteId:sid, url:site.ssl_url||site.url||''});
-    onProgress(`サイト作成完了 → デプロイ中...`);
-  }
-
-  // ③ デプロイ
-  let deployRes;
-  try{
-    deployRes = await fetch(`https://api.netlify.com/api/v1/sites/${sid}/deploys`,{
-      method:'POST',
-      headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/zip'},
-      body: blob,
-    });
-  }catch(e){ throw new Error(`デプロイAPIへの接続失敗: ${e.message}`); }
-
-  if(!deployRes.ok){
-    const e=await deployRes.json().catch(()=>({}));
-    throw new Error(`デプロイ失敗 (${deployRes.status}): ${e.message||JSON.stringify(e)}`);
-  }
-  const data = await deployRes.json();
-  saveNtl({token, siteId:sid, url:data.deploy_ssl_url||data.url||''});
-  return data;
-}
-
-let _fbApp=null;
-function initFB(cfg){
-  try{
-    if(!firebase.apps.length) _fbApp=firebase.initializeApp(cfg);
-    else _fbApp=firebase.app();
-    return firebase.database();
-  }catch(e){console.error('FB init error',e);return null;}
-}
-
-/* ─── SETUP SCREEN ──────────────────────────────────── */
-function SetupScreen({onDone}){
-  const [step,setStep]=useState(1);
-  const [raw,setRaw]=useState('');
-  const [err,setErr]=useState('');
-  const [testing,setTesting]=useState(false);
-
-  const tryConnect=async()=>{
-    setErr('');setTesting(true);
-    try{
-      let cfg;
-      try{
-        // まずそのままJSONとして試す
-        cfg=JSON.parse(raw.trim());
-      }catch{
-        try{
-          // JS オブジェクトリテラル形式（const firebaseConfig = { ... } など）を安全に評価
-          let cleaned=raw.trim();
-          // "const firebaseConfig = " などの前置きを除去
-          cleaned=cleaned.replace(/^.*?firebaseConfig\s*=\s*/,'');
-          // 末尾のセミコロンや不要文字を除去
-          cleaned=cleaned.replace(/;?\s*$/, '');
-          // Function コンストラクタで安全に評価
-          cfg=Function('"use strict";return ('+cleaned+')')();
-        }catch(e2){
-          throw new Error('設定の読み取りに失敗しました。Firebase コンソールからコピーした firebaseConfig をそのまま貼り付けてください。');
-        }
-      }
-      if(!cfg||typeof cfg!=='object') throw new Error('設定が正しく読み取れませんでした');
-      if(!cfg.apiKey)       throw new Error('apiKey が見つかりません');
-      if(!cfg.databaseURL)  throw new Error('databaseURL が見つかりません。Realtime Database を有効にしてください。');
-      const db=initFB(cfg);
-      if(!db) throw new Error('Firebase の初期化に失敗しました');
-      await db.ref('/.info/connected').once('value');
-      saveCfg(cfg);
-      setTesting(false);
-      onDone(cfg);
-    }catch(e){setErr(e.message||'接続に失敗しました');setTesting(false);}
-  };
-
-  const S={
-    wrap:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100vh',background:'#f0f4ff',padding:20},
-    card:{background:'#fff',borderRadius:16,padding:32,maxWidth:520,width:'100%',boxShadow:'0 8px 40px rgba(26,35,126,.12)'},
-    h1:{fontSize:22,fontWeight:900,color:'#1a237e',marginBottom:6},
-    sub:{fontSize:13,color:'#78909c',marginBottom:24},
-    step:{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:9,marginBottom:8,border:'1px solid'},
-    num:{width:26,height:26,borderRadius:'50%',background:'#1a237e',color:'#fff',fontWeight:800,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0},
-    code:{background:'#f5f5f5',borderRadius:6,padding:'10px 12px',fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:'#263238',marginTop:8,wordBreak:'break-all'},
-    ta:{width:'100%',minHeight:130,padding:'10px 12px',border:'1.5px solid #9fa8da',borderRadius:9,fontSize:12,fontFamily:"'JetBrains Mono',monospace",outline:'none',resize:'vertical',color:'#263238',marginTop:8},
-  };
-
-  return(
-    <div style={S.wrap}>
-      <div style={S.card}>
-        <div style={{textAlign:'center',marginBottom:24}}>
-          <div style={{fontSize:40,marginBottom:8}}>🔥</div>
-          <div style={S.h1}>Firebase 連携設定</div>
-          <div style={S.sub}>初回のみ必要です。一度設定すれば次回から自動で接続されます。</div>
-        </div>
-
-        {/* Steps */}
-        <div style={{marginBottom:20}}>
-          {[
-            ['1','Firebase Console を開く','https://console.firebase.google.com にアクセスし「プロジェクトを作成」をクリック'],
-            ['2','Realtime Database を有効化','左メニュー → Realtime Database → 「データベースを作成」→ テストモード で作成'],
-            ['3','ルールを設定','Realtime Database → ルール タブを開き以下を貼り付けて「公開」'],
-            ['4','ウェブアプリを登録','プロジェクト設定（歯車）→「アプリを追加」→ ウェブ（</>）→ アプリのニックネームを入力して登録'],
-            ['5','設定をコピーして貼り付け','firebaseConfig の中身をコピーして下のテキストエリアに貼り付け'],
-          ].map(([n,title,desc])=>(
-            <div key={n} style={{...S.step,borderColor:n==='3'?'#ffcdd2':'#e8eaf6',background:n==='3'?'#fff5f5':'#f8f9ff'}}>
-              <div style={S.num}>{n}</div>
-              <div>
-                <div style={{fontWeight:700,fontSize:13,color:'#1a237e'}}>{title}</div>
-                <div style={{fontSize:11,color:'#78909c',marginTop:2}}>{desc}</div>
-                {n==='3'&&<div style={S.code}>{`{\n  "rules": {\n    ".read": true,\n    ".write": true\n  }\n}`}</div>}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{fontSize:11,fontWeight:700,color:'#78909c',marginBottom:4}}>firebaseConfig を貼り付け（JSON または Firebase のコードスニペットごと）</div>
-        <textarea style={S.ta} value={raw} onChange={e=>setRaw(e.target.value)}
-          placeholder={`{\n  "apiKey": "AIza...",\n  "authDomain": "...",\n  "databaseURL": "https://...-default-rtdb.firebaseio.com",\n  "projectId": "...",\n  ...\n}`}/>
-
-        {err&&<div style={{background:'#ffebee',color:'#c62828',borderRadius:8,padding:'9px 12px',fontSize:12,fontWeight:600,marginTop:10}}>⚠️ {err}</div>}
-
-        <button onClick={tryConnect} disabled={!raw.trim()||testing} style={{
-          width:'100%',marginTop:16,padding:14,background:raw.trim()&&!testing?'#1a237e':'#b0bec5',
-          color:'#fff',border:'none',borderRadius:9,fontWeight:800,fontSize:15,cursor:raw.trim()&&!testing?'pointer':'default',
-        }}>
-          {testing?'🔄 接続中...':'🚀 接続してデータを保存する'}
-        </button>
-      </div>
+<div class="modal-overlay hidden" id="member-modal">
+  <div class="modal-box">
+    <h3 id="member-modal-title">メンバーを追加</h3>
+    <div class="form-row"><label>名前</label><input id="m-name" type="text" placeholder="例: 田中 太郎" /></div>
+    <div class="form-row">
+      <label>学年</label>
+      <select id="m-grade">
+        <option value="4">4年生</option>
+        <option value="3">3年生</option>
+        <option value="2">2年生</option>
+        <option value="1" selected>1年生</option>
+      </select>
     </div>
-  );
+    <div class="form-row"><label>カラー</label><input id="m-color" type="color" value="#6366f1" /></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveMember()">保存</button>
+      <button class="btn btn-ghost" onclick="closeMemberModal()">キャンセル</button>
+      <button class="btn btn-danger" id="delete-member-btn" style="display:none" onclick="deleteMember()">削除</button>
+    </div>
+  </div>
+</div>
+
+<div id="shift-popup">
+  <h4 id="popup-name"></h4>
+  <div class="popup-meta" id="popup-meta"></div>
+  <div class="form-row"><label>メモ</label><input id="popup-note" type="text" placeholder="メモを追加..." /></div>
+  <div class="popup-actions">
+    <button class="btn btn-primary" onclick="saveShiftNote()" style="font-size:.78rem;padding:5px 11px">保存</button>
+    <button class="btn btn-danger"  onclick="deleteShift()"   style="font-size:.78rem;padding:5px 11px">削除</button>
+    <button class="btn btn-ghost"   onclick="closePopup()"    style="font-size:.78rem;padding:5px 11px">閉じる</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Config ─────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://abpqnypoqxnphkdssibm.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFicHFueXBvcXhucGhrZHNzaWJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0NzQ4OTIsImV4cCI6MjA5NTA1MDg5Mn0.t3cHVWmwHOggCabSsFGNsontegRr4SOI5CZjyeflAYk';
+
+const GRADE_COLORS = { 4:'#a78bfa', 3:'#34d399', 2:'#60a5fa', 1:'#fb923c' };
+const GRADE_LABELS = { 4:'4年生', 3:'3年生', 2:'2年生', 1:'1年生' };
+const DAY_NAMES    = ['月','火','水','木','金','土','日'];
+const HOUR_W = 64, DAY_W = HOUR_W * 24, LABEL_W = 144;
+
+// ── State ──────────────────────────────────────────────────────
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let weekStart = getWeekStart(new Date());
+let members = [], shifts = [];
+let inputMode = 'confirmed';
+let activeShiftId = null, editingMemberId = null, channel = null;
+
+// ── Boot ───────────────────────────────────────────────────────
+setSyncStatus('connecting');
+loadData();
+setupRealtime();
+setInterval(drawNowLines, 60000);
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closePopup(); closeMemberModal(); }
+  if (!e.target.matches('input,select,textarea')) {
+    if (e.key === 'ArrowLeft')  prevWeek();
+    if (e.key === 'ArrowRight') nextWeek();
+  }
+});
+document.getElementById('gantt-wrapper').addEventListener('scroll', updateActiveDayTab, { passive: true });
+document.addEventListener('click', e => {
+  if (!document.getElementById('shift-popup').contains(e.target)) closePopup();
+});
+
+// ── Data ───────────────────────────────────────────────────────
+async function loadData() {
+  const dates = weekDates();
+  try {
+    const [mRes, sRes] = await Promise.all([
+      sb.from('members').select('*').order('grade', { ascending: false }).order('name'),
+      sb.from('shifts').select('*').gte('date', fmtDate(dates[0])).lte('date', fmtDate(dates[6]))
+    ]);
+    if (mRes.error) throw mRes.error;
+    if (sRes.error) throw sRes.error;
+    members = mRes.data;
+    shifts  = sRes.data;
+    setSyncStatus('ok');
+    renderAll();
+  } catch(err) {
+    setSyncStatus('error');
+    showToast('エラー: ' + err.message);
+  }
 }
 
-/* ─── HOOKS ────────────────────────────────────────── */
-function useIsMobile(){
-  const [mb,setMb]=useState(()=>window.innerWidth<768);
-  useEffect(()=>{
-    const h=()=>setMb(window.innerWidth<768);
-    window.addEventListener('resize',h);return()=>window.removeEventListener('resize',h);
-  },[]);
-  return mb;
+function setupRealtime() {
+  if (channel) sb.removeChannel(channel);
+  channel = sb.channel('all')
+    .on('postgres_changes', { event:'*', schema:'public', table:'shifts'  }, onShiftChange)
+    .on('postgres_changes', { event:'*', schema:'public', table:'members' }, () => loadData())
+    .subscribe(s => setSyncStatus(s === 'SUBSCRIBED' ? 'ok' : s === 'CHANNEL_ERROR' ? 'error' : 'connecting'));
 }
 
-/* ══════════════════════════════ APP ══════════════════════════════ */
-function App(){
-  const isMb=useIsMobile();
-  const [screen,setScreen]=useState('gantt');
-  const [monday,setMon]   =useState(mon0(new Date()));
-  const [day,   setDay]   =useState(()=>{const w=new Date().getDay();return w===0?6:w-1;});
-  const [positions,setPos]=useState(DEF_POS);
-  const [staff, setStaff] =useState(DEF_STAFF);
-  const [shifts,setShifts]=useState({});
-  const [prefs, setPrefs] =useState({});
-  const [req,   setReq]   =useState({counter:2,kitchen:3,drink:1,hall:2,clean:1});
-  const [types, setTypes] =useState(['P','社','バ','AM','PM']);
-  const [bizHours,setBiz] =useState({
-    // key: 0-6 (月〜日), value: {open:'09:00', close:'22:00', closed:false}
-    0:{open:'09:00',close:'22:00',closed:false},
-    1:{open:'09:00',close:'22:00',closed:false},
-    2:{open:'09:00',close:'22:00',closed:false},
-    3:{open:'09:00',close:'22:00',closed:false},
-    4:{open:'09:00',close:'22:00',closed:false},
-    5:{open:'09:00',close:'22:00',closed:false},
-    6:{open:'09:00',close:'22:00',closed:false},
+function onShiftChange(p) {
+  const dates = weekDates();
+  const s0 = fmtDate(dates[0]), e0 = fmtDate(dates[6]);
+  if (p.eventType === 'INSERT') {
+    if (p.new.date >= s0 && p.new.date <= e0) { shifts.push(p.new); renderGantt(); }
+  } else if (p.eventType === 'UPDATE') {
+    const i = shifts.findIndex(s => s.id === p.new.id);
+    if (i >= 0) shifts[i] = p.new;
+    else if (p.new.date >= s0 && p.new.date <= e0) shifts.push(p.new);
+    renderGantt();
+  } else if (p.eventType === 'DELETE') {
+    shifts = shifts.filter(s => s.id !== p.old.id);
+    renderGantt();
+  }
+}
+
+// ── Render ─────────────────────────────────────────────────────
+function renderAll() { renderGantt(); renderMemberPanel(); renderDayNav(); }
+
+function renderGantt() {
+  const gantt = document.getElementById('gantt');
+  gantt.innerHTML = '';
+  const dates    = weekDates();
+  const todayStr = fmtDate(new Date());
+  gantt.appendChild(buildTimeHeader(dates, todayStr));
+  [4,3,2,1].forEach(g => {
+    const gm = members.filter(m => m.grade === g);
+    if (gm.length) gantt.appendChild(buildGradeGroup(g, gm, dates, todayStr));
   });
-  const [modal, setModal] =useState(null);
-  const dragR=useRef(null);
-  const [drag, setDrag]   =useState(null);
+  updateWeekRange();
+  renderDayNav();
+  setTimeout(drawNowLines, 50);
+}
 
-  /* ── Firebase state ── */
-  const [fbCfg,  setFbCfg] =useState(loadCfg);
-  const [dbReady,setDbReady]=useState(false);
-  const [syncing,setSyncing]=useState(false);
-  const [savedAt,setSavedAt]=useState(null);
-  const [syncErr,setSyncErr]=useState(false);
-  const dbRef    =useRef(null);
-  const saveTimer=useRef(null);
-  const loading  =useRef(false);
-
-  /* ── Netlify deploy state ── */
-  const [ntlModal,setNtlModal]=useState(false);
-
-  /* ── Firebase init + initial load ── */
-  useEffect(()=>{
-    if(!fbCfg) return;
-    const db=initFB(fbCfg);
-    if(!db) return;
-    dbRef.current=db.ref('/shiftapp');
-    loading.current=true;
-    dbRef.current.once('value',snap=>{
-      const d=snap.val();
-      if(d){
-        if(Array.isArray(d.positions)&&d.positions.length) setPos(d.positions);
-        if(Array.isArray(d.staff)    &&d.staff.length)     setStaff(d.staff);
-        if(d.shifts) setShifts(d.shifts);
-        if(d.prefs)  setPrefs(d.prefs);
-        if(d.req)    setReq(d.req);
-        if(d.bizHours) setBiz(d.bizHours);
-        if(Array.isArray(d.types)&&d.types.length) setTypes(d.types);
-      }
-      loading.current=false;
-      setDbReady(true);
-    });
-  },[fbCfg]);
-
-  /* ── Auto-save to Firebase (debounced 1.5s) ── */
-  useEffect(()=>{
-    if(!dbReady||loading.current||!dbRef.current) return;
-    clearTimeout(saveTimer.current);
-    setSyncing(true);setSyncErr(false);
-    saveTimer.current=setTimeout(()=>{
-      dbRef.current.set({positions,staff,shifts,prefs,req,bizHours,types})
-        .then(()=>{setSyncing(false);setSavedAt(new Date());})
-        .catch(()=>{setSyncing(false);setSyncErr(true);});
-    },1500);
-  },[positions,staff,shifts,prefs,req,bizHours,types,dbReady]);
-
-  const weeks=useMemo(()=>wk(monday),[monday]);
-  const sDk  =dk(weeks[day]);
-  const posOf=id=>positions.find(p=>p.id===id)||{id:'?',name:'?',short:'?',color:'#90a4ae'};
-
-  const counts=useMemo(()=>{
-    const c=Array.from({length:TSLOTS},()=>{const o={_:0};positions.forEach(p=>o[p.id]=0);return o;});
-    staff.forEach(s=>{
-      const raw=shifts[`${s.id}-${sDk}`];
-      const arr=Array.isArray(raw)?raw:(raw?[raw]:[]);
-      arr.forEach(sh=>{for(let i=sh.s;i<sh.e&&i<TSLOTS;i++){if(c[i][sh.pid]!==undefined)c[i][sh.pid]++;c[i]._++;}});
-    });
-    return c;
-  },[shifts,staff,sDk,positions]);
-
-  const hCounts=useMemo(()=>Array.from({length:THRS},(_,hi)=>{
-    const b=hi*SPH,o={_:0};positions.forEach(p=>o[p.id]=0);
-    for(let i=b;i<b+SPH&&i<TSLOTS;i++){
-      positions.forEach(p=>{if((counts[i][p.id]||0)>o[p.id])o[p.id]=counts[i][p.id]||0;});
-      if(counts[i]._>o._)o._=counts[i]._;
+function buildTimeHeader(dates, todayStr) {
+  const el = document.createElement('div');
+  el.id = 'time-header';
+  const sp = document.createElement('div');
+  sp.className = 'th-spacer';
+  sp.innerHTML = '<span>名前</span><span>↕ 時間 →</span>';
+  el.appendChild(sp);
+  dates.forEach((d, i) => {
+    const isToday = fmtDate(d) === todayStr;
+    const isSat = i === 5, isSun = i === 6;
+    const day = document.createElement('div');
+    day.className = 'th-day'+(isToday?' is-today':'')+(isSat?' is-weekend':'')+(isSun?' is-sunday':'');
+    const lbl = document.createElement('div');
+    lbl.className = 'th-day-label';
+    lbl.innerHTML = `<span class="th-day-name">${DAY_NAMES[i]}</span><span class="th-day-date">${d.getMonth()+1}/${d.getDate()}</span>${isToday?'<span class="th-today-badge">TODAY</span>':''}`;
+    day.appendChild(lbl);
+    const hrs = document.createElement('div');
+    hrs.className = 'th-hours';
+    for (let h = 0; h < 24; h++) {
+      const hel = document.createElement('div');
+      hel.className = 'th-hour' + (h === 0 ? ' h0' : '');
+      hel.textContent = h === 0 ? '0:00' : h;
+      hrs.appendChild(hel);
     }
-    return o;
-  }),[counts,positions]);
+    day.appendChild(hrs);
+    el.appendChild(day);
+  });
+  return el;
+}
 
-  /* ── drag / touch ── */
-  useEffect(()=>{
-    const up=()=>{dragR.current=null;setDrag(null);};
-    window.addEventListener('mouseup',up);window.addEventListener('touchend',up);
-    return()=>{window.removeEventListener('mouseup',up);window.removeEventListener('touchend',up);};
-  },[]);
+function buildGradeGroup(grade, gm, dates, todayStr) {
+  const grp = document.createElement('div');
+  grp.className = `grade-group g${grade}`;
+  const gh = document.createElement('div');
+  gh.className = 'grade-header';
+  const gl = document.createElement('div');
+  gl.className = 'grade-label';
+  gl.textContent = GRADE_LABELS[grade];
+  const glr = document.createElement('div');
+  glr.className = 'grade-line-row';
+  const ln = document.createElement('div');
+  ln.className = 'grade-line';
+  glr.appendChild(ln);
+  gh.appendChild(gl);
+  gh.appendChild(glr);
+  grp.appendChild(gh);
+  gm.forEach(m => grp.appendChild(buildMemberRow(m, shifts.filter(s => s.member_id === m.id), dates, todayStr)));
+  return grp;
+}
 
-  const dims=isMb?M:D;
+function buildMemberRow(member, mShifts, dates, todayStr) {
+  const row = document.createElement('div');
+  row.className = 'member-row';
+  const lbl = document.createElement('div');
+  lbl.className = 'member-label';
+  const av = document.createElement('div');
+  av.className = 'avatar';
+  av.style.background = member.color || GRADE_COLORS[member.grade];
+  av.textContent = member.name.charAt(0);
+  const nm = document.createElement('div');
+  nm.className = 'member-name';
+  nm.textContent = member.name;
+  lbl.appendChild(av); lbl.appendChild(nm);
+  lbl.addEventListener('click', () => openEditMember(member));
+  row.appendChild(lbl);
 
-  const slotFromX=(x,el)=>{
-    const rect=el.getBoundingClientRect();
-    return Math.max(0,Math.min(TSLOTS-1,~~((x-rect.left)/dims.SW)));
-  };
+  const grid = document.createElement('div');
+  grid.className = 'row-grid';
+  dates.forEach((d, i) => {
+    const isToday = fmtDate(d) === todayStr;
+    const isWe = i >= 5;
+    const col = document.createElement('div');
+    col.className = 'day-col'+(isToday?' is-today':'')+(isWe?' is-weekend':'');
+    for (let h = 0; h < 24; h++) { const c = document.createElement('div'); c.className = 'hour-cell'; col.appendChild(c); }
+    grid.appendChild(col);
+  });
+  mShifts.forEach(shift => {
+    const di = dayIndex(shift.date);
+    if (di >= 0 && di <= 6) grid.appendChild(buildShiftBar(shift, member, di));
+  });
+  setupDrag(grid, member, dates);
+  row.appendChild(grid);
+  return row;
+}
 
-  const onMD=useCallback((sid,clientX,el)=>{
-    const raw=shifts[`${sid}-${sDk}`];
-    const arr=Array.isArray(raw)?raw:(raw?[raw]:[]);
-    const slot=slotFromX(clientX,el);
-    if(arr.some(sh=>slot>=sh.s&&slot<sh.e))return false;
-    dragR.current={sid,s0:slot,s1:slot};setDrag({sid,s0:slot,s1:slot});return true;
-  },[shifts,sDk,dims]);
+function buildShiftBar(shift, member, di) {
+  const bar = document.createElement('div');
+  bar.className = 'shift-bar' + (shift.type === 'desired' ? ' desired' : '');
+  bar.style.background = member.color || GRADE_COLORS[member.grade];
+  bar.style.left  = (di * DAY_W + (shift.start_minutes / 60) * HOUR_W) + 'px';
+  bar.style.width = Math.max(((shift.end_minutes - shift.start_minutes) / 60) * HOUR_W, 6) + 'px';
+  const t = document.createElement('span');
+  t.className = 'shift-time';
+  t.textContent = `${toTime(shift.start_minutes)}–${toTime(shift.end_minutes)}`;
+  bar.appendChild(t);
+  if (shift.note) {
+    const n = document.createElement('span');
+    n.textContent = ' ' + shift.note;
+    n.style.cssText = 'margin-left:4px;opacity:.75';
+    bar.appendChild(n);
+  }
+  bar.addEventListener('click', e => { e.stopPropagation(); showShiftPopup(shift, member, e); });
+  return bar;
+}
 
-  const onMM=useCallback((sid,clientX,el)=>{
-    if(!dragR.current||dragR.current.sid!==sid)return;
-    const slot=slotFromX(clientX,el);
-    if(dragR.current.s1===slot)return;
-    dragR.current.s1=slot;setDrag(d=>d?{...d,s1:slot}:null);
-  },[dims]);
+// ── Drag ───────────────────────────────────────────────────────
+function setupDrag(grid, member, dates) {
+  let preview = null, startInfo = null;
 
-  const onMU=useCallback((sid)=>{
-    const dr=dragR.current;
-    if(!dr||dr.sid!==sid){dragR.current=null;setDrag(null);return;}
-    const s0=Math.min(dr.s0,dr.s1),e0=Math.max(dr.s0,dr.s1)+1;
-    dragR.current=null;setDrag(null);
-    if(e0-s0>=1){
-      const defPid=staff.find(x=>x.id===sid)?.pid||positions[0]?.id;
-      setModal({type:'add',sid,s:s0,e:e0,pid:defPid,brk:0,dk:sDk});
-    }
-  },[sDk,staff,positions]);
+  function getInfo(cx) {
+    const wr = document.getElementById('gantt-wrapper');
+    const x  = cx - LABEL_W + wr.scrollLeft;
+    const di = Math.max(0, Math.min(6, Math.floor(x / DAY_W)));
+    const mins = snap(Math.max(0, Math.min(1440, ((x - di * DAY_W) / HOUR_W) * 60)));
+    return { di, mins };
+  }
 
-  /* mobile tap on empty row → open add modal */
-  const onTap=useCallback((sid)=>{
-    const defPid=staff.find(x=>x.id===sid)?.pid||positions[0]?.id;
-    setModal({type:'add',sid,s:t2s('10:00'),e:t2s('18:00'),pid:defPid,brk:0,dk:sDk});
-  },[sDk,staff,positions]);
+  function startDrag(cx) {
+    startInfo = getInfo(cx);
+    preview = document.createElement('div');
+    preview.className = 'drag-preview';
+    preview.style.background = member.color || GRADE_COLORS[member.grade];
+    if (inputMode === 'desired') preview.style.opacity = '.5';
+    grid.appendChild(preview);
+    refreshPrev(startInfo.mins, startInfo.mins);
+  }
 
-  const save=()=>{
-    if(!modal)return;
-    if(modal.e<=modal.s){alert('終了は開始より後にしてください');return;}
-    const key=`${modal.sid}-${modal.dk}`;
-    setShifts(p=>{
-      const arr=Array.isArray(p[key])?[...p[key]]:(p[key]?[p[key]]:[]);
-      const entry={s:modal.s,e:modal.e,pid:modal.pid,brk:modal.brk||0};
-      if(modal.type==='add') arr.push(entry);
-      else arr[modal.idx]=entry;
-      return{...p,[key]:arr};
+  function moveDrag(cx) {
+    if (!startInfo || !preview) return;
+    refreshPrev(startInfo.mins, getInfo(cx).mins);
+  }
+
+  async function endDrag(cx) {
+    if (!startInfo || !preview) { startInfo = null; return; }
+    const end = getInfo(cx).mins;
+    preview.remove(); preview = null;
+    const s = Math.min(startInfo.mins, end);
+    const e = Math.max(startInfo.mins, end);
+    const di = startInfo.di;
+    startInfo = null;
+    if (e - s >= 15) await createShift(member.id, dates[di], s, e);
+  }
+
+  function refreshPrev(sMins, eMins) {
+    const s = Math.min(sMins, eMins), e = Math.max(sMins, eMins);
+    preview.style.left  = (startInfo.di * DAY_W + (s / 60) * HOUR_W) + 'px';
+    preview.style.width = Math.max(((e - s) / 60) * HOUR_W, 4) + 'px';
+    preview.textContent = `${toTime(s)}–${toTime(e)}`;
+  }
+
+  grid.addEventListener('mousedown', e => {
+    if (e.target.classList.contains('shift-bar') || e.button !== 0) return;
+    e.preventDefault();
+    startDrag(e.clientX);
+    const mm = e2 => moveDrag(e2.clientX);
+    const mu = e2 => { endDrag(e2.clientX); document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); };
+    document.addEventListener('mousemove', mm);
+    document.addEventListener('mouseup', mu);
+  });
+  grid.addEventListener('touchstart', e => { if (!e.target.classList.contains('shift-bar')) startDrag(e.touches[0].clientX); }, { passive: true });
+  grid.addEventListener('touchmove',  e => moveDrag(e.touches[0].clientX), { passive: true });
+  grid.addEventListener('touchend',   e => endDrag(e.changedTouches[0].clientX));
+}
+
+// ── Now Line ───────────────────────────────────────────────────
+function drawNowLines() {
+  document.querySelectorAll('.now-line').forEach(el => el.remove());
+  const todayStr = fmtDate(new Date());
+  const di = weekDates().findIndex(d => fmtDate(d) === todayStr);
+  if (di < 0) return;
+  const now = new Date();
+  const x = di * DAY_W + ((now.getHours() * 60 + now.getMinutes()) / 60) * HOUR_W;
+  document.querySelectorAll('.row-grid').forEach(grid => {
+    const ln = document.createElement('div');
+    ln.className = 'now-line';
+    ln.style.left = x + 'px';
+    grid.appendChild(ln);
+  });
+}
+
+// ── Day Nav ────────────────────────────────────────────────────
+function renderDayNav() {
+  const nav = document.getElementById('day-nav');
+  nav.innerHTML = '';
+  const todayStr = fmtDate(new Date());
+  weekDates().forEach((d, i) => {
+    const isSat = i === 5, isSun = i === 6;
+    const btn = document.createElement('button');
+    btn.className = 'dnav-btn'+(fmtDate(d)===todayStr?' is-today':'')+(isSat?' is-weekend':'')+(isSun?' is-sunday':'');
+    btn.dataset.i = i;
+    btn.innerHTML = `<span class="dnav-name">${DAY_NAMES[i]}</span><span class="dnav-date">${d.getMonth()+1}/${d.getDate()}</span><span class="dnav-dot"></span>`;
+    btn.addEventListener('click', () => scrollToDay(i));
+    nav.appendChild(btn);
+  });
+  updateActiveDayTab();
+}
+
+function scrollToDay(i) {
+  document.getElementById('gantt-wrapper').scrollTo({ left: i * DAY_W, behavior: 'smooth' });
+}
+
+function updateActiveDayTab() {
+  const sl = document.getElementById('gantt-wrapper').scrollLeft;
+  const ai = Math.min(6, Math.floor((sl + DAY_W * 0.3) / DAY_W));
+  document.querySelectorAll('.dnav-btn').forEach((b, i) => b.classList.toggle('active', i === ai));
+}
+
+function updateWeekRange() {
+  const d = weekDates();
+  document.getElementById('week-range').textContent =
+    `${d[0].getMonth()+1}/${d[0].getDate()}(月) 〜 ${d[6].getMonth()+1}/${d[6].getDate()}(日)`;
+}
+
+// ── Week Nav ───────────────────────────────────────────────────
+function prevWeek()    { weekStart = new Date(weekStart); weekStart.setDate(weekStart.getDate()-7); loadData(); }
+function nextWeek()    { weekStart = new Date(weekStart); weekStart.setDate(weekStart.getDate()+7); loadData(); }
+function goThisWeek()  {
+  weekStart = getWeekStart(new Date()); loadData();
+  setTimeout(() => { const now = new Date(); scrollToDay(now.getDay()===0?6:now.getDay()-1); }, 350);
+}
+
+// ── Mode ───────────────────────────────────────────────────────
+function setMode(m) {
+  inputMode = m;
+  const bc = document.getElementById('btn-confirmed');
+  const bd = document.getElementById('btn-desired');
+  bc.className = 'mode-btn' + (m==='confirmed' ? ' active m-confirmed' : ' m-confirmed');
+  bd.className = 'mode-btn' + (m==='desired'   ? ' active m-desired'   : ' m-desired');
+}
+
+// ── CRUD ───────────────────────────────────────────────────────
+async function createShift(memberId, date, startMin, endMin) {
+  try {
+    const { error } = await sb.from('shifts').insert({
+      member_id: memberId, date: fmtDate(date),
+      start_minutes: startMin, end_minutes: endMin, note: '', type: inputMode
     });
-    setModal(null);
-  };
-  const del=()=>{
-    if(!modal)return;
-    const key=`${modal.sid}-${modal.dk}`;
-    setShifts(p=>{
-      const arr=Array.isArray(p[key])?[...p[key]]:(p[key]?[p[key]]:[]);
-      arr.splice(modal.idx,1);
-      const n={...p};
-      if(arr.length===0)delete n[key]; else n[key]=arr;
-      return n;
+    if (error) throw error;
+    showToast(inputMode==='desired' ? '◎ 希望シフトを追加しました' : '✓ 確定シフトを追加しました');
+  } catch(e) { showToast('エラー: ' + e.message); }
+}
+
+async function deleteShift() {
+  if (!activeShiftId) return;
+  try {
+    const { error } = await sb.from('shifts').delete().eq('id', activeShiftId);
+    if (error) throw error;
+    closePopup(); showToast('削除しました');
+  } catch(e) { showToast('エラー: ' + e.message); }
+}
+
+async function saveShiftNote() {
+  if (!activeShiftId) return;
+  try {
+    const { error } = await sb.from('shifts').update({ note: document.getElementById('popup-note').value }).eq('id', activeShiftId);
+    if (error) throw error;
+    closePopup(); showToast('保存しました ✓');
+  } catch(e) { showToast('エラー: ' + e.message); }
+}
+
+async function saveMember() {
+  const name = document.getElementById('m-name').value.trim();
+  const grade = parseInt(document.getElementById('m-grade').value);
+  const color = document.getElementById('m-color').value;
+  if (!name) { showToast('名前を入力してください'); return; }
+  try {
+    const { error } = editingMemberId
+      ? await sb.from('members').update({name,grade,color}).eq('id', editingMemberId)
+      : await sb.from('members').insert({name,grade,color});
+    if (error) throw error;
+    closeMemberModal(); showToast(editingMemberId ? '更新しました ✓' : '追加しました ✓');
+  } catch(e) { showToast('エラー: ' + e.message); }
+}
+
+async function deleteMember() {
+  if (!editingMemberId || !confirm('このメンバーを削除しますか？')) return;
+  try {
+    const { error } = await sb.from('members').delete().eq('id', editingMemberId);
+    if (error) throw error;
+    closeMemberModal(); showToast('削除しました');
+  } catch(e) { showToast('エラー: ' + e.message); }
+}
+
+// ── UI ─────────────────────────────────────────────────────────
+function showShiftPopup(shift, member, e) {
+  activeShiftId = shift.id;
+  const di = dayIndex(shift.date);
+  const d  = weekDates()[di];
+  document.getElementById('popup-name').textContent = member.name + (shift.type==='desired' ? '  【希望】' : '  【確定】');
+  document.getElementById('popup-meta').textContent = (d ? DAY_NAMES[di]+' '+((d.getMonth()+1)+'/'+d.getDate()) : '') + '  ' + toTime(shift.start_minutes) + '〜' + toTime(shift.end_minutes);
+  document.getElementById('popup-note').value = shift.note || '';
+  const p = document.getElementById('shift-popup');
+  p.classList.add('visible');
+  let x = e.clientX+12, y = e.clientY+12;
+  if (x+240 > window.innerWidth)  x = e.clientX-252;
+  if (y+190 > window.innerHeight) y = e.clientY-202;
+  p.style.left = x+'px'; p.style.top = y+'px';
+}
+function closePopup() { document.getElementById('shift-popup').classList.remove('visible'); activeShiftId = null; }
+
+function openAddMember() {
+  editingMemberId = null;
+  document.getElementById('member-modal-title').textContent = 'メンバーを追加';
+  document.getElementById('m-name').value = '';
+  document.getElementById('m-grade').value = '1';
+  document.getElementById('m-color').value = '#fb923c';
+  document.getElementById('delete-member-btn').style.display = 'none';
+  document.getElementById('member-modal').classList.remove('hidden');
+}
+function openEditMember(member) {
+  editingMemberId = member.id;
+  document.getElementById('member-modal-title').textContent = 'メンバーを編集';
+  document.getElementById('m-name').value  = member.name;
+  document.getElementById('m-grade').value = member.grade;
+  document.getElementById('m-color').value = member.color || GRADE_COLORS[member.grade];
+  document.getElementById('delete-member-btn').style.display = '';
+  document.getElementById('member-modal').classList.remove('hidden');
+}
+function closeMemberModal() { document.getElementById('member-modal').classList.add('hidden'); }
+function toggleMemberPanel() { document.getElementById('member-panel').classList.toggle('open'); }
+
+function renderMemberPanel() {
+  const list = document.getElementById('member-list');
+  list.innerHTML = '';
+  [4,3,2,1].forEach(g => {
+    const gm = members.filter(m => m.grade === g);
+    if (!gm.length) return;
+    const gh = document.createElement('div');
+    gh.style.cssText = `font-size:.7rem;color:${GRADE_COLORS[g]};font-weight:700;padding:6px 3px 3px;letter-spacing:.09em;text-transform:uppercase`;
+    gh.textContent = GRADE_LABELS[g];
+    list.appendChild(gh);
+    gm.forEach(m => {
+      const card = document.createElement('div');
+      card.className = 'mc';
+      card.innerHTML = `<div style="width:28px;height:28px;border-radius:50%;background:${m.color||GRADE_COLORS[m.grade]};display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;color:#0d1117;flex-shrink:0">${m.name.charAt(0)}</div><div class="mc-info"><div class="mc-name">${m.name}</div><div class="mc-grade">${GRADE_LABELS[m.grade]}</div></div><div class="small-btn" onclick='openEditMember(${JSON.stringify(m)})'>✎</div>`;
+      list.appendChild(card);
     });
-    setModal(null);
-  };
-
-  const exportCSV=()=>{
-    const hdr=['スタッフ','区分','ポジション','出勤','退勤','日計(h)','休憩(分)'];
-    const rows=[];
-    staff.forEach(s=>{
-      const raw=shifts[`${s.id}-${sDk}`];
-      const arr=Array.isArray(raw)?raw:(raw?[raw]:[]);
-      if(arr.length===0){rows.push([s.name,s.type,'','','','','']);}
-      else arr.forEach(sh=>rows.push([s.name,s.type,posOf(sh.pid).name,s2t(sh.s),s2t(sh.e),slotH(sh.s,sh.e).toFixed(1),sh.brk]));
-    });
-    const csv=[hdr,...rows].map(r=>r.join(',')).join('\n');
-    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv'}));
-    a.download=`シフト_${sDk}.csv`;a.click();
-  };
-
-  const shared={day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizHours,modal,setModal,drag,onMD,onMM,onMU,onTap,hCounts,counts,posOf,monday,save,del,dims,isMb};
-
-  /* ── Not configured yet → show setup ── */
-  if(!fbCfg) return <SetupScreen onDone={cfg=>{setFbCfg(cfg);setDbReady(false);loading.current=false;}}/>;
-
-  /* ── Sync badge ── */
-  const syncBadge=fbCfg?(
-    syncing ? <span style={{fontSize:10,color:'rgba(255,255,255,.7)',display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
-        <span style={{width:7,height:7,borderRadius:'50%',background:'#ffca28',display:'inline-block',animation:'pulse 1s infinite'}}/>保存中…</span>
-    : syncErr ? <span style={{fontSize:10,color:'#ff8a80',display:'flex',alignItems:'center',gap:4,flexShrink:0}}>⚠ 保存失敗</span>
-    : savedAt ? <span style={{fontSize:10,color:'rgba(255,255,255,.55)',display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
-        <span style={{width:7,height:7,borderRadius:'50%',background:'#69f0ae',display:'inline-block'}}/>保存済</span>
-    : null
-  ):null;
-
-  /* ─────────── RENDER ─────────── */
-  return(
-    <div style={{display:'flex',flexDirection:'column',height:'100vh',overflow:'hidden',background:'#eceff1'}}>
-    <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
-
-      {/* ── HEADER ── */}
-      <div className="no-print" style={{
-        background:'linear-gradient(90deg,#5c6bc0,#9575cd)',
-        height:isMb?50:48,display:'flex',alignItems:'center',gap:8,
-        padding:isMb?'0 12px':'0 14px',flexShrink:0,
-        boxShadow:'0 2px 8px rgba(0,0,0,.3)',
-      }}>
-        <div style={{background:'#e53935',color:'#fff',width:30,height:30,borderRadius:7,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,fontSize:14,flexShrink:0}}>S</div>
-        {!isMb&&<span style={{color:'#fff',fontWeight:800,fontSize:16}}>シフトスケジューラー</span>}
-
-        {/* screen toggle — desktop only (mobile uses bottom nav) */}
-        {!isMb&&(
-          <div style={{marginLeft:12,display:'flex',gap:2,background:'rgba(0,0,0,.15)',borderRadius:20,padding:3}}>
-            {[['gantt','📊 シフト表'],['admin','⚙️ 管理画面']].map(([id,label])=>(
-              <button key={id} onClick={()=>setScreen(id)} style={{padding:'4px 14px',border:'none',borderRadius:17,cursor:'pointer',fontSize:12,fontWeight:700,
-                background:screen===id?'#fff':'transparent',color:screen===id?'#7986cb':'rgba(255,255,255,.8)',transition:'all .15s'}}>
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {isMb&&<div style={{marginLeft:4,flexShrink:0}}>{syncBadge}</div>}
-
-        {/* week nav */}
-        <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:isMb?4:6}}>
-          <HBtn onClick={()=>setMon(m=>{const d=new Date(m);d.setDate(d.getDate()-7);return d;})}>‹</HBtn>
-          <span style={{color:'#fff',fontSize:isMb?11:12,fontFamily:"'JetBrains Mono',monospace",minWidth:isMb?100:130,textAlign:'center',letterSpacing:'-.01em'}}>
-            {weeks[0].getMonth()+1}/{weeks[0].getDate()}〜{weeks[6].getMonth()+1}/{weeks[6].getDate()}
-          </span>
-          <HBtn onClick={()=>setMon(m=>{const d=new Date(m);d.setDate(d.getDate()+7);return d;})}>›</HBtn>
-        </div>
-
-        {!isMb&&<>
-          <div style={{width:1,height:22,background:'rgba(255,255,255,.2)',margin:'0 4px'}}/>
-          <HBtn onClick={exportCSV}>📥 CSV</HBtn>
-          <HBtn onClick={()=>window.print()}>🖨️ 印刷</HBtn>
-          <div style={{width:1,height:22,background:'rgba(255,255,255,.2)',margin:'0 4px'}}/>
-          {syncBadge}
-          <HBtn onClick={()=>setNtlModal(true)} style={{background:'rgba(0,200,100,.2)',border:'1px solid rgba(0,200,100,.4)'}}>🚀 Deploy</HBtn>
-          <HBtn onClick={()=>{if(confirm('Firebase連携を解除しますか？（データは削除されません）')){clearCfg();setFbCfg(null);setDbReady(false);}}}>⚙ DB設定</HBtn>
-        </>}
-      </div>
-
-      {/* ── CONTENT ── */}
-      <div style={{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
-        {screen==='gantt'
-          ? <GanttScreen {...shared} exportCSV={exportCSV}/>
-          : <AdminScreen {...{positions,setPos,staff,setStaff,prefs,setPrefs,req,setReq,shifts,setShifts,posOf,isMb,bizHours,setBiz,types,setTypes}}/>
-        }
-      </div>
-
-      {/* ── BOTTOM NAV (mobile only) ── */}
-      {isMb&&(
-        <div className="no-print" style={{
-          display:'flex',background:'#fff',
-          borderTop:'1px solid #e8eaf6',
-          flexShrink:0,
-          boxShadow:'0 -4px 16px rgba(100,120,200,.1)',
-          paddingBottom:'env(safe-area-inset-bottom)',
-        }}>
-          {[['gantt','📊','シフト表'],['admin','⚙️','管理'],['deploy','🚀','Deploy']].map(([id,icon,label])=>(
-            <button key={id} onClick={()=>id==='deploy'?setNtlModal(true):setScreen(id)} style={{
-              flex:1,padding:'10px 0 8px',border:'none',background:'none',cursor:'pointer',
-              display:'flex',flexDirection:'column',alignItems:'center',gap:2,
-              color:id==='deploy'?'#7986cb':screen===id?'#7986cb':'#90a4ae',
-              borderTop:screen===id&&id!=='deploy'?'2.5px solid #9575cd':'2.5px solid transparent',
-              transition:'color .12s',
-            }}>
-              <span style={{fontSize:20,lineHeight:1}}>{icon}</span>
-              <span style={{fontSize:10,fontWeight:screen===id?800:600}}>{label}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* ── MODAL ── */}
-      {modal&&<ShiftModal modal={modal} setModal={setModal} positions={positions} staff={staff} save={save} del={del} isMb={isMb}/>}
-      {ntlModal&&<DeployModal onClose={()=>setNtlModal(false)} isMb={isMb}/>}
-    </div>
-  );
+  });
 }
 
-/* ══════════════════════ STAFF ROW ══════════════════════ */
-function StaffRow({s,si,shList,prefs,sDk,drag,positions,posOf,biz,bizOpen,bizClose,onMD,onMM,onMU,onTap,setModal,dims,isMb,RH,NW,TW,SW,HW}){
-  const barRef=useRef(null);
-  const pref=prefs[`${s.id}-${sDk}`];
-  // Backwards compat: support old {from,to} and new {ranges:[{from,to}]}
-  const getPrefRanges=p=>{
-    if(!p?.available) return [];
-    if(p.ranges&&p.ranges.length) return p.ranges;
-    if(p.from) return [{from:p.from,to:p.to||p.from}];
-    return [];
-  };
-  const prefRanges=getPrefRanges(pref);
-  const even=si%2===0;
-  const dp=drag?.sid===s.id?drag:null;
-  const totalH=shList.reduce((sum,sh)=>sum+slotH(sh.s,sh.e),0);
-
-  const touchStart=e=>{
-    if(isMb){
-      const t=e.touches[0];
-      if(!barRef.current)return;
-      const started=onMD(s.id,t.clientX,barRef.current);
-      if(!started)e.preventDefault();
-    } else {
-      if(!barRef.current)return;
-      onMD(s.id,e.touches[0].clientX,barRef.current);
-    }
-  };
-  const touchMove=e=>{if(!barRef.current)return;onMM(s.id,e.touches[0].clientX,barRef.current);};
-  const touchEnd=()=>onMU(s.id);
-
-  return(
-    <div style={{display:'flex',borderBottom:'1px solid #e8edf8',background:even?'#ffffff':'#f4f6ff',height:RH}}>
-      {/* Name */}
-      <div style={{width:NW,flexShrink:0,borderRight:'1px solid #cfd8dc',display:'flex',alignItems:'center',gap:isMb?4:6,padding:isMb?'0 4px':'0 6px 0 8px',overflow:'hidden',cursor:isMb?'pointer':'default'}}
-        onClick={isMb?()=>onTap(s.id):undefined}>
-        <span style={{background:posOf(s.pid).color,color:'#fff',fontSize:isMb?8:9,fontWeight:800,padding:'2px 5px',borderRadius:8,flexShrink:0}}>{s.type}</span>
-        <span style={{fontSize:isMb?11:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.name}</span>
-        {shList.length>1&&(
-          <span style={{marginLeft:'auto',fontSize:8,background:'#7986cb',color:'#fff',borderRadius:8,padding:'1px 5px',flexShrink:0,fontWeight:800}}>{shList.length}回</span>
-        )}
-        {pref&&!isMb&&shList.length<=1&&(
-          <span style={{marginLeft:'auto',fontSize:9,color:pref.available?'#4caf50':'#ef5350',flexShrink:0,fontWeight:700}}>
-            {pref.available?'○':'✕'}
-          </span>
-        )}
-      </div>
-
-      {/* Bar area */}
-      <div ref={barRef}
-        style={{width:TSLOTS*SW,flexShrink:0,position:'relative',cursor:isMb?'pointer':'crosshair',userSelect:'none',touchAction:'pan-x'}}
-        onMouseDown={e=>{if(!barRef.current||isMb)return;onMD(s.id,e.clientX,barRef.current);}}
-        onMouseMove={e=>{if(!barRef.current||isMb)return;onMM(s.id,e.clientX,barRef.current);}}
-        onMouseUp={()=>{if(!isMb)onMU(s.id);}}
-        onTouchStart={touchStart}
-        onTouchMove={touchMove}
-        onTouchEnd={touchEnd}
-        onClick={isMb&&!drag?()=>onTap(s.id):undefined}
-      >
-        {/* Grid lines */}
-        {Array.from({length:THRS},(_,hi)=>(
-          <React.Fragment key={hi}>
-            <div style={{position:'absolute',left:hi*HW,top:0,bottom:0,width:1,background:'#cfd8dc'}}/>
-            {!isMb&&<>
-              <div style={{position:'absolute',left:hi*HW+HW/2,top:0,bottom:0,width:1,background:'#e8ecef'}}/>
-              <div style={{position:'absolute',left:hi*HW+HW/4,top:'35%',bottom:0,width:1,background:'#f3f5f7'}}/>
-              <div style={{position:'absolute',left:hi*HW+HW*3/4,top:'35%',bottom:0,width:1,background:'#f3f5f7'}}/>
-            </>}
-            {isMb&&<div style={{position:'absolute',left:hi*HW+HW/2,top:'30%',bottom:0,width:1,background:'#eef0f1'}}/>}
-          </React.Fragment>
-        ))}
-        <div style={{position:'absolute',right:0,top:0,bottom:0,width:1,background:'#cfd8dc'}}/>
-
-        {/* Pref overlays */}
-        {pref&&!pref.available&&(
-          <div style={{position:'absolute',inset:0,background:'rgba(80,96,104,.52)',zIndex:1,pointerEvents:'none'}}/>
-        )}
-        {pref?.available&&prefRanges.length>0&&(()=>{
-          // Compute blocked segments = complement of allowed ranges
-          const sorted=[...prefRanges].map(r=>[t2s(r.from),t2s(r.to)]).sort((a,b)=>a[0]-b[0]);
-          const blocked=[];let cur=0;
-          sorted.forEach(([s2,e2])=>{if(s2>cur)blocked.push([cur,s2]);cur=Math.max(cur,e2);});
-          if(cur<TSLOTS)blocked.push([cur,TSLOTS]);
-          return blocked.map(([bs,be],bi)=>(
-            <div key={bi} style={{position:'absolute',left:bs*SW,width:(be-bs)*SW,top:0,bottom:0,
-              background:'rgba(80,96,104,.45)',zIndex:1,pointerEvents:'none',
-              borderLeft:bs>0?'2px solid rgba(80,96,104,.6)':'none',
-              borderRight:be<TSLOTS?'2px solid rgba(80,96,104,.6)':'none',
-            }}/>
-          ));
-        })()}
-
-        {/* Business hours overlay */}
-        {biz.closed?(
-          <div style={{position:'absolute',inset:0,zIndex:2,pointerEvents:'none',
-            background:'repeating-linear-gradient(135deg,rgba(55,71,79,.13) 0px,rgba(55,71,79,.13) 3px,transparent 3px,transparent 9px)',
-            borderTop:'2px solid rgba(198,40,40,.3)',borderBottom:'2px solid rgba(198,40,40,.3)'}}>
-            <span style={{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-50%)',fontSize:9,color:'#ef9a9a',fontWeight:700,whiteSpace:'nowrap',letterSpacing:.05}}>定休日</span>
-          </div>
-        ):(bizOpen!==null&&bizClose!==null)&&(
-          <>
-            {bizOpen>0&&(
-              <div style={{position:'absolute',left:0,width:bizOpen*SW,top:0,bottom:0,zIndex:2,pointerEvents:'none',
-                background:'repeating-linear-gradient(135deg,rgba(55,71,79,.16) 0px,rgba(55,71,79,.16) 3px,transparent 3px,transparent 9px)',
-                borderRight:'2px solid rgba(96,125,139,.5)'}}/>
-            )}
-            {bizClose<TSLOTS&&(
-              <div style={{position:'absolute',left:bizClose*SW,width:(TSLOTS-bizClose)*SW,top:0,bottom:0,zIndex:2,pointerEvents:'none',
-                background:'repeating-linear-gradient(135deg,rgba(55,71,79,.16) 0px,rgba(55,71,79,.16) 3px,transparent 3px,transparent 9px)',
-                borderLeft:'2px solid rgba(96,125,139,.5)'}}/>
-            )}
-          </>
-        )}
-
-        {/* Drag preview */}
-        {dp&&(
-          <div style={{position:'absolute',zIndex:3,pointerEvents:'none',
-            left:Math.min(dp.s0,dp.s1)*SW,width:(Math.abs(dp.s1-dp.s0)+1)*SW,
-            top:2,height:RH-4,background:'rgba(33,150,243,.15)',border:'2px dashed #2196f3',borderRadius:8}}/>
-        )}
-
-        {/* Shift blocks — overlap-aware lane layout */}
-        {(()=>{
-          // Compute lane for each shift (greedy interval coloring)
-          const lanes=shList.map(()=>0);
-          shList.forEach((sh,i)=>{
-            const used=new Set();
-            for(let j=0;j<i;j++){
-              const o=shList[j];
-              if(sh.s<o.e&&o.s<sh.e) used.add(lanes[j]);
-            }
-            let lane=0; while(used.has(lane)) lane++;
-            lanes[i]=lane;
-          });
-          const totalLanes=lanes.length>0?Math.max(...lanes)+1:1;
-          return shList.map((sh,idx)=>{
-            const lane=lanes[idx];
-            const top=totalLanes>1?2+lane*Math.floor((RH-4)/totalLanes):2;
-            const height=totalLanes>1?Math.floor((RH-4)/totalLanes)-1:RH-4;
-            return(
-              <div key={idx}
-                onMouseDown={e=>e.stopPropagation()}
-                onClick={e=>{e.stopPropagation();setModal({type:'edit',sid:s.id,s:sh.s,e:sh.e,pid:sh.pid,brk:sh.brk||0,dk:sDk,idx});}}
-                style={{position:'absolute',zIndex:4,
-                  left:sh.s*SW+1,width:(sh.e-sh.s)*SW-2,
-                  top,height,
-                  background:posOf(sh.pid).color,borderRadius:6,cursor:'pointer',
-                  display:'flex',alignItems:'center',paddingLeft:4,overflow:'hidden',whiteSpace:'nowrap',
-                  boxShadow:'0 2px 8px rgba(0,0,0,.18)',opacity:.95,
-                }}
-                onMouseEnter={e=>e.currentTarget.style.filter='brightness(1.12)'}
-                onMouseLeave={e=>e.currentTarget.style.filter=''}
-              >
-                {(sh.e-sh.s)*SW>(isMb?30:45)&&(
-                  <span style={{color:'#fff',fontSize:isMb?7:8,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",pointerEvents:'none'}}>
-                    {isMb?`${s2t(sh.s)}-${s2t(sh.e)}`:`${posOf(sh.pid).short} ${s2t(sh.s)}〜${s2t(sh.e)}`}
-                  </span>
-                )}
-              </div>
-            );
-          });
-        })()}
-
-        {shList.length===0&&!isMb&&(
-          <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',paddingLeft:8,pointerEvents:'none',zIndex:2}}>
-            <span style={{fontSize:10,color:'#d0d8dc'}}>ドラッグでシフト追加</span>
-          </div>
-        )}
-      </div>
-
-      {/* Totals (desktop only) */}
-      {!isMb&&<div style={{width:TW,flexShrink:0,borderLeft:'1px solid #cfd8dc',display:'flex',alignItems:'center',justifyContent:'center',gap:3,padding:'0 6px',fontSize:11}}>
-        {shList.length>0?(
-          <span style={{fontFamily:"'JetBrains Mono',monospace",color:'#7986cb',fontWeight:800,fontSize:12}}>
-            {totalH.toFixed(1)}h
-            {shList.length>1&&<span style={{fontSize:9,color:'#9575cd',marginLeft:3}}>×{shList.length}</span>}
-          </span>
-        ):<span style={{color:'#e0e0e0'}}>—</span>}
-      </div>}
-    </div>
-  );
+function setSyncStatus(s) { document.getElementById('sync-dot').className = (s==='SUBSCRIBED'||s==='ok') ? 'ok' : s; }
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-/* ══════════════════════ GANTT SCREEN ══════════════════════ */
-function GanttScreen({day,setDay,weeks,sDk,staff,positions,shifts,prefs,req,bizHours,modal,setModal,drag,onMD,onMM,onMU,onTap,hCounts,counts,posOf,monday,save,del,dims,isMb,exportCSV}){
-  const {SW,NW,TW,RH}=dims;
-  const HW=SW*SPH;
-  const totW=NW+TSLOTS*SW+(isMb?0:TW);
-
-  // current day-of-week biz hours (0=月...6=日)
-  const biz=bizHours?.[day]||{open:'00:00',close:'23:59',closed:false};
-  const bizOpen =biz.closed?null:t2s(biz.open);
-  const bizClose=biz.closed?null:t2s(biz.close);
-
-  return(
-    <>
-      {/* ── Day tabs ── */}
-      <div className="no-print" style={{
-        background:'#fff',borderBottom:'1px solid #dde3f5',
-        display:'flex',alignItems:'stretch',
-        padding:isMb?'0 4px':'0 10px',
-        flexShrink:0,overflowX:'auto',
-        boxShadow:'0 2px 8px rgba(100,120,200,.08)',
-        WebkitOverflowScrolling:'touch',
-      }}>
-        {weeks.map((d,i)=>{
-          const hasSh=staff.some(s=>{const a=shifts[`${s.id}-${dk(d)}`];return Array.isArray(a)?a.length>0:!!a;});
-          const sat=i===5,sun=i===6,act=day===i;
-          return(
-            <button key={i} onClick={()=>setDay(i)} style={{
-              padding:isMb?'6px 10px':'6px 14px',border:'none',background:'none',cursor:'pointer',
-              fontWeight:act?800:500,fontSize:isMb?12:13,
-              color:act?'#5c6bc0':sat?'#1565c0':sun?'#e53935':'#546e7a',
-              borderBottom:act?'3px solid #7986cb':'3px solid transparent',
-              display:'flex',flexDirection:'column',alignItems:'center',gap:1,
-              position:'relative',flexShrink:0,
-            }}>
-              <span>{JA[i]}</span>
-              <span style={{fontSize:9,fontFamily:"'JetBrains Mono',monospace"}}>{d.getMonth()+1}/{d.getDate()}</span>
-              {hasSh&&<span style={{position:'absolute',top:4,right:4,width:5,height:5,borderRadius:'50%',background:'#e53935'}}/>}
-            </button>
-          );
-        })}
-        {/* mobile actions */}
-        {isMb&&<div style={{marginLeft:'auto',display:'flex',alignItems:'center',padding:'0 8px',gap:6,flexShrink:0}}>
-          <button onClick={exportCSV} style={{padding:'5px 9px',background:'#e3f2fd',color:'#1565c0',border:'none',borderRadius:6,fontSize:11,fontWeight:700,cursor:'pointer'}}>CSV</button>
-        </div>}
-        {/* desktop legend */}
-        {!isMb&&<div style={{marginLeft:'auto',display:'flex',alignItems:'center',padding:'0 12px',gap:10,flexShrink:0}}>
-          {positions.map(p=>(
-            <span key={p.id} style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#78909c'}}>
-              <span style={{width:9,height:9,borderRadius:2,background:p.color,display:'inline-block',flexShrink:0}}/>
-              {p.name}
-            </span>
-          ))}
-        </div>}
-      </div>
-
-      {/* ── Gantt scroll ── */}
-      <div style={{flex:1,overflowX:'auto',overflowY:'auto',WebkitOverflowScrolling:'touch'}}>
-        <div style={{minWidth:totW}}>
-
-          {/* ── Time header + Position status (sticky) ── */}
-          <div style={{position:'sticky',top:0,zIndex:20}}>
-
-            {/* Time ruler */}
-            <div style={{display:'flex',background:'#263238'}}>
-              <div style={{width:NW,flexShrink:0,borderRight:'1px solid #37474f',padding:'4px 6px',color:'#78909c',fontSize:10,fontWeight:700,display:'flex',alignItems:'center'}}>
-                {isMb?'名前':'スタッフ'}
-              </div>
-              <div style={{width:TSLOTS*SW,flexShrink:0,position:'relative',height:isMb?24:30}}>
-                {Array.from({length:THRS+1},(_,i)=>(
-                  <div key={i} style={{position:'absolute',left:i*HW,top:0,bottom:0,borderLeft:i===0?'none':'1px solid #455a64',display:'flex',alignItems:'center',paddingLeft:2}}>
-                    {i<THRS&&<span style={{color:'#b0bec5',fontSize:isMb?9:11,fontFamily:"'JetBrains Mono',monospace"}}>{String(HS+i).padStart(2,'0')}</span>}
-                  </div>
-                ))}
-                {!isMb&&Array.from({length:THRS},(_,hi)=>(
-                  <div key={hi} style={{position:'absolute',left:hi*HW+HW/2,top:'55%',bottom:0,borderLeft:'1px solid #37474f'}}/>
-                ))}
-              </div>
-              {!isMb&&<div style={{width:TW,flexShrink:0,borderLeft:'1px solid #37474f',padding:'4px 8px',color:'#78909c',fontSize:11,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-                <span>出勤</span><span style={{color:'#455a64'}}>〜</span><span>退勤</span><span style={{color:'#455a64'}}>|</span><span>時間</span>
-              </div>}
-            </div>
-
-            {/* ── Position status bars ── */}
-            <div style={{background:'#1c2a30',borderBottom:'2px solid #37474f'}}>
-              {positions.map((p,pi)=>{
-                const reqN=req[p.id]||0;
-                return(
-                  <div key={p.id} style={{display:'flex',height:isMb?14:16,borderTop:pi===0?'none':'1px solid rgba(255,255,255,.05)'}}>
-                    {/* label */}
-                    <div style={{width:NW,flexShrink:0,borderRight:'1px solid #37474f',display:'flex',alignItems:'center',gap:5,padding:'0 6px',overflow:'hidden'}}>
-                      <div style={{width:7,height:7,borderRadius:2,background:p.color,flexShrink:0}}/>
-                      <span style={{fontSize:isMb?8:9,fontWeight:700,color:'#b0bec5',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{isMb?p.short:p.name}</span>
-                      <span style={{fontSize:8,color:'#546e7a',marginLeft:'auto',flexShrink:0,fontFamily:"'JetBrains Mono',monospace"}}>/{reqN}</span>
-                    </div>
-                    {/* per-hour cells */}
-                    <div style={{width:TSLOTS*SW,flexShrink:0,position:'relative',overflow:'hidden'}}>
-                      {Array.from({length:THRS},(_,hi)=>{
-                        const c=hCounts[hi]?.[p.id]||0;
-                        const ok=reqN===0||(c>=reqN);
-                        const warn=reqN>0&&c>0&&c<reqN;
-                        const miss=reqN>0&&c===0;
-                        // check if this hour is outside biz hours
-                        const slotStart=hi*SPH;
-                        const outsideBiz=biz.closed||(bizOpen!==null&&(slotStart+SPH<=bizOpen||slotStart>=bizClose));
-                        const bg=outsideBiz?'rgba(40,50,55,.45)':miss?'rgba(198,40,40,.55)':warn?'rgba(245,124,0,.5)':c>0?p.color+'55':'transparent';
-                        const textCol=miss?'#ff8a80':warn?'#ffcc80':c>0?p.color:'transparent';
-                        return(
-                          <div key={hi} style={{
-                            position:'absolute',left:hi*HW,top:0,width:HW,height:'100%',
-                            background:outsideBiz?'repeating-linear-gradient(135deg,rgba(55,71,79,.25) 0px,rgba(55,71,79,.25) 2px,transparent 2px,transparent 6px)':bg,
-                            borderLeft:`1px solid rgba(255,255,255,.07)`,
-                            display:'flex',alignItems:'center',justifyContent:'center',
-                            transition:'background .2s',
-                          }}>
-                            {!outsideBiz&&c>0&&<span style={{fontSize:8,fontWeight:800,color:textCol,fontFamily:"'JetBrains Mono',monospace",lineHeight:1}}>{c}</span>}
-                            {!outsideBiz&&miss&&reqN>0&&<span style={{fontSize:7,fontWeight:800,color:'#ff8a80',lineHeight:1}}>✕</span>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    {!isMb&&<div style={{width:TW,flexShrink:0,borderLeft:'1px solid #37474f',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      {(() => {
-                        const tot=staff.filter(s=>{const a=shifts[`${s.id}-${sDk}`];const arr=Array.isArray(a)?a:(a?[a]:[]);return arr.some(sh=>sh.pid===p.id);}).length;
-                        const ok=reqN===0||tot>=reqN;
-                        return <span style={{fontSize:9,fontWeight:800,color:ok?(tot>0?p.color:'#546e7a'):'#ff5252',fontFamily:"'JetBrains Mono',monospace"}}>
-                          {tot>0?`${tot}名`:reqN>0?'0':'—'}{reqN>0&&` / ${reqN}`}
-                        </span>;
-                      })()}
-                    </div>}
-                  </div>
-                );
-              })}
-              {/* total row */}
-              <div style={{display:'flex',height:isMb?14:16,borderTop:'1px solid rgba(255,255,255,.12)',background:'rgba(0,0,0,.2)'}}>
-                <div style={{width:NW,flexShrink:0,borderRight:'1px solid #37474f',display:'flex',alignItems:'center',padding:'0 6px'}}>
-                  <span style={{fontSize:isMb?8:9,fontWeight:700,color:'#78909c'}}>合計</span>
-                </div>
-                <div style={{width:TSLOTS*SW,flexShrink:0,position:'relative'}}>
-                  {Array.from({length:THRS},(_,hi)=>{
-                    const c=hCounts[hi]?._||0;
-                    const totalReq=positions.reduce((s,p)=>s+(req[p.id]||0),0);
-                    const ok=totalReq===0||c>=totalReq;
-                    return(
-                      <div key={hi} style={{position:'absolute',left:hi*HW,top:0,width:HW,height:'100%',
-                        borderLeft:'1px solid rgba(255,255,255,.07)',
-                        display:'flex',alignItems:'center',justifyContent:'center'}}>
-                        {c>0&&<span style={{fontSize:8,fontWeight:800,color:ok?'#69f0ae':'#ff5252',fontFamily:"'JetBrains Mono',monospace"}}>{c}</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-                {!isMb&&<div style={{width:TW,flexShrink:0,borderLeft:'1px solid #37474f',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                  <span style={{fontSize:9,fontWeight:800,color:'#b0bec5',fontFamily:"'JetBrains Mono',monospace"}}>
-                    {staff.filter(s=>{const a=shifts[`${s.id}-${sDk}`];return Array.isArray(a)?a.length>0:!!a;}).length}名出勤
-                  </span>
-                </div>}
-              </div>
-            </div>
-
-          </div>{/* /sticky */}
-
-          {/* Staff rows */}
-          {staff.map((s,si)=>{
-            const raw=shifts[`${s.id}-${sDk}`];
-            const shList=Array.isArray(raw)?raw:(raw?[raw]:[]);
-            return(
-              <StaffRow key={s.id} s={s} si={si} shList={shList} prefs={prefs} sDk={sDk}
-                drag={drag} positions={positions} posOf={posOf} biz={biz} bizOpen={bizOpen} bizClose={bizClose}
-                onMD={onMD} onMM={onMM} onMU={onMU} onTap={onTap} setModal={setModal}
-                dims={dims} isMb={isMb} RH={RH} NW={NW} TW={TW} SW={SW} HW={HW}
-              />
-            );
-          })}
-
-          <StaffingBarChart {...{counts,positions,req,bizHours,day,NW,TW,SW,THRS,HW,TSLOTS,isMb,dims}}/>
-          <WeeklyTotals {...{staff,shifts,monday,weeks,isMb,NW}}/>
-          <div style={{height:20}}/>
-        </div>
-      </div>
-    </>
-  );
+// ── Utils ──────────────────────────────────────────────────────
+function getWeekStart(d) {
+  const r = new Date(d); r.setHours(0,0,0,0);
+  const day = r.getDay();
+  r.setDate(r.getDate() + (day === 0 ? -6 : 1 - day));
+  return r;
 }
-
-/* ── Staffing Bar Chart ── */
-function StaffingBarChart({counts,positions,req,bizHours,day,NW,TW,SW,THRS,HW,TSLOTS,isMb,dims}){
-  const CHART_H = isMb ? 56 : 72;
-  const BAR_PAD = 2;
-  const biz = bizHours?.[day]||{open:'00:00',close:'23:59',closed:false};
-  const bizOpen  = biz.closed ? null : t2s(biz.open);
-  const bizClose = biz.closed ? null : t2s(biz.close);
-  const totalReq = positions.reduce((s,p)=>s+(req[p.id]||0), 0);
-
-  // per-slot total count
-  const slotTotals = useMemo(()=>Array.from({length:TSLOTS},(_,i)=>counts[i]?._||0),[counts,TSLOTS]);
-
-  // per-hour max count
-  const hourTotals = useMemo(()=>Array.from({length:THRS},(_,hi)=>{
-    let max=0;
-    for(let i=hi*4;i<hi*4+4&&i<TSLOTS;i++) if(slotTotals[i]>max) max=slotTotals[i];
-    return max;
-  }),[slotTotals,THRS,TSLOTS]);
-
-  const maxVal = Math.max(totalReq+2, ...hourTotals, 1);
-
-  return(
-    <div style={{display:'flex',borderTop:'2px dashed #dde3f5',background:'#f8f9ff'}}>
-      {/* Label */}
-      <div style={{
-        width:NW, flexShrink:0, borderRight:'1px solid #dde3f5',
-        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-        padding:'0 4px', gap:2,
-      }}>
-        <span style={{fontSize:isMb?9:10, fontWeight:800, color:'#9575cd', letterSpacing:'0.02em'}}>👥</span>
-        <span style={{fontSize:isMb?8:10, fontWeight:800, color:'#9575cd', textAlign:'center', lineHeight:1.2}}>人数</span>
-        {totalReq>0&&<span style={{fontSize:isMb?7:9, color:'#b0bec5', fontWeight:700}}>基準{totalReq}</span>}
-      </div>
-
-      {/* Chart area */}
-      <div style={{width:THRS*HW, flexShrink:0, height:CHART_H, position:'relative', overflow:'hidden'}}>
-        {/* Required line */}
-        {totalReq>0&&(
-          <div style={{
-            position:'absolute', left:0, right:0,
-            bottom: (totalReq/maxVal)*(CHART_H-8)+4,
-            height:1.5, background:'rgba(150,120,200,.45)',
-            zIndex:5, pointerEvents:'none',
-          }}/>
-        )}
-
-        {Array.from({length:THRS},(_,hi)=>{
-          const slotStart = hi*4;
-          const outside = biz.closed||(bizOpen!==null&&(slotStart+4<=bizOpen||slotStart>=bizClose));
-          const count = hourTotals[hi];
-          const barH = outside ? 0 : Math.max(count>0?4:0, Math.round((count/maxVal)*(CHART_H-8)));
-
-          let barColor, textColor;
-          if(outside || count===0){
-            barColor='#e8edf5'; textColor='transparent';
-          } else if(totalReq===0){
-            barColor='#b0bec5'; textColor='#78909c';
-          } else if(count < totalReq){
-            barColor='linear-gradient(180deg,#ef9a9a,#e53935)'; textColor='#c62828';
-          } else if(count === totalReq){
-            barColor='linear-gradient(180deg,#cfd8dc,#90a4ae)'; textColor='#607d8b';
-          } else {
-            barColor='linear-gradient(180deg,#90caf9,#1e88e5)'; textColor='#1565c0';
-          }
-
-          return(
-            <div key={hi} style={{
-              position:'absolute', left:hi*HW+BAR_PAD, width:HW-BAR_PAD*2,
-              bottom:0, top:0,
-              display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-end',
-              borderLeft: hi>0?'1px solid rgba(200,210,240,.4)':'none',
-            }}>
-              {/* count label above bar */}
-              {!outside&&count>0&&(
-                <span style={{
-                  fontSize:isMb?8:9, fontWeight:800, color:textColor,
-                  marginBottom:1, lineHeight:1,
-                  fontFamily:"'JetBrains Mono',monospace",
-                }}>{count}</span>
-              )}
-              {/* bar */}
-              <div style={{
-                width:'72%', height: barH,
-                background: barColor,
-                borderRadius:'4px 4px 2px 2px',
-                marginBottom:3,
-                boxShadow: count>0&&!outside?'0 1px 4px rgba(0,0,0,.12)':'none',
-                transition:'height .25s ease',
-              }}/>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Totals column (desktop only) */}
-      {!isMb&&<div style={{width:TW, flexShrink:0, borderLeft:'1px solid #dde3f5',
-        display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:2}}>
-        <span style={{fontSize:10, color:'#9575cd', fontWeight:800}}>
-          {totalReq>0?`基準 ${totalReq}名`:'—'}
-        </span>
-      </div>}
-    </div>
-  );
+function weekDates() {
+  return Array.from({length:7}, (_,i) => { const d = new Date(weekStart); d.setDate(d.getDate()+i); return d; });
 }
-
-/* ── Weekly Totals strip ── */
-function WeeklyTotals({staff,shifts,monday,weeks,isMb,NW}){
-  return(
-    <div style={{display:'flex',minHeight:22,background:'#ede7f6',borderTop:'2px solid #ce93d8',flexWrap:'wrap'}}>
-      <div style={{width:NW,flexShrink:0,borderRight:'1px solid #9fa8da',padding:'4px 6px',display:'flex',alignItems:'center'}}>
-        <span style={{fontSize:9,fontWeight:700,color:'#9575cd'}}>今週累計</span>
-      </div>
-      <div style={{flex:1,padding:'4px 8px',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',overflow:'hidden'}}>
-        {staff.map(s=>{
-          const tot=wk(monday).reduce((sum,d)=>{
-            const raw=shifts[`${s.id}-${dk(d)}`];
-            const arr=Array.isArray(raw)?raw:(raw?[raw]:[]);
-            return sum+arr.reduce((s2,sh)=>s2+slotH(sh.s,sh.e),0);
-          },0);
-          return tot>0?<span key={s.id} style={{fontSize:10,color:'#7986cb',fontWeight:600,whiteSpace:'nowrap'}}>{s.name}:<strong style={{fontFamily:"'JetBrains Mono',monospace",marginLeft:2}}>{tot.toFixed(1)}h</strong></span>:null;
-        })}
-      </div>
-    </div>
-  );
+function dayIndex(dateStr) {
+  const d = new Date(dateStr); d.setHours(0,0,0,0);
+  const ws = new Date(weekStart); ws.setHours(0,0,0,0);
+  return Math.round((d - ws) / 86400000);
 }
-
-/* ══════════════════════ ADMIN SCREEN ══════════════════════ */
-function AdminScreen({positions,setPos,staff,setStaff,prefs,setPrefs,req,setReq,shifts,setShifts,posOf,isMb,bizHours,setBiz,types,setTypes}){
-  const [tab,setTab]=useState('staff');
-  return(
-    <div style={{display:'flex',flexDirection:'column',flex:1,overflow:'hidden'}}>
-      <div style={{background:'#fff',borderBottom:'2px solid #e8eaf6',display:'flex',padding:`0 ${isMb?8:20}px`,gap:0,flexShrink:0,overflowX:'auto'}}>
-        {[['staff','👥 スタッフ'],['position','🏷️ ポジション'],['biz','⏰ 営業時間'],['prefs','📅 希望シフト']].map(([id,label])=>(
-          <button key={id} onClick={()=>setTab(id)} style={{
-            padding:isMb?'10px 10px':'11px 18px',border:'none',background:'none',cursor:'pointer',
-            fontSize:isMb?12:13,fontWeight:tab===id?800:500,
-            color:tab===id?'#7986cb':'#78909c',
-            borderBottom:tab===id?'2.5px solid #9575cd':'2.5px solid transparent',
-            marginBottom:-2,whiteSpace:'nowrap',
-          }}>{label}</button>
-        ))}
-      </div>
-      <div style={{flex:1,overflow:'auto',padding:isMb?12:24,WebkitOverflowScrolling:'touch'}}>
-        {tab==='staff'   &&<StaffAdmin    staff={staff} setStaff={setStaff} positions={positions} posOf={posOf} setShifts={setShifts} req={req} setReq={setReq} isMb={isMb} types={types} setTypes={setTypes}/>}
-        {tab==='position'&&<PositionAdmin positions={positions} setPos={setPos} req={req} setReq={setReq} isMb={isMb}/>}
-        {tab==='biz'     &&<BizAdmin      bizHours={bizHours} setBiz={setBiz} isMb={isMb}/>}
-        {tab==='prefs'   &&<PrefsAdmin    staff={staff} prefs={prefs} setPrefs={setPrefs} posOf={posOf} isMb={isMb}/>}
-      </div>
-    </div>
-  );
-}
-
-/* ── Staff Admin ── */
-function StaffAdmin({staff,setStaff,positions,posOf,setShifts,req,setReq,isMb,types,setTypes}){
-  const [editing,setEditing]=useState(null);
-  const [form,setForm]=useState({name:'',type:types[0]||'P'});
-  const [newType,setNewType]=useState('');
-
-  const openEdit=s=>{setEditing(s.id);setForm({name:s.name,type:s.type});};
-  const openNew =()=>{setEditing('new');setForm({name:'',type:types[0]||'P'});};
-  const save=()=>{
-    if(!form.name.trim())return;
-    if(editing==='new') setStaff(p=>[...p,{id:Date.now().toString(),pid:positions[0]?.id||'',...form,name:form.name.trim()}]);
-    else setStaff(p=>p.map(s=>s.id===editing?{...s,...form,name:form.name.trim()}:s));
-    setEditing(null);
-  };
-  const del=id=>{
-    if(!confirm('このスタッフを削除しますか？'))return;
-    setStaff(p=>p.filter(s=>s.id!==id));
-    setShifts(p=>{const n={...p};Object.keys(n).filter(k=>k.startsWith(id+'-')).forEach(k=>delete n[k]);return n;});
-  };
-  const addType=()=>{
-    const t=newType.trim();
-    if(!t||types.includes(t))return;
-    setTypes(p=>[...p,t]);
-    setNewType('');
-  };
-  const delType=t=>{
-    if(types.length<=1){alert('区分は1つ以上必要です');return;}
-    if(!confirm(`「${t}」を削除しますか？`))return;
-    setTypes(p=>p.filter(x=>x!==t));
-  };
-
-  return(
-    <div style={{maxWidth:900}}>
-      {/* ── 区分管理 ── */}
-      <div style={{background:'#fff',borderRadius:16,border:'1px solid #e8eaed',padding:'14px 16px',marginBottom:18}}>
-        <div style={{fontWeight:700,fontSize:13,color:'#1a237e',marginBottom:10}}>🏷 区分の管理</div>
-        <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
-          {types.map(t=>(
-            <div key={t} style={{display:'flex',alignItems:'center',gap:4,background:'#eceff1',borderRadius:20,padding:'4px 10px 4px 12px',border:'1px solid #cfd8dc'}}>
-              <span style={{fontSize:13,fontWeight:700,color:'#37474f'}}>{t}</span>
-              <button onClick={()=>delType(t)} style={{width:16,height:16,borderRadius:'50%',border:'none',background:'#b0bec5',color:'#fff',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontWeight:900,lineHeight:1}}>×</button>
-            </div>
-          ))}
-        </div>
-        <div style={{display:'flex',gap:6}}>
-          <input value={newType} onChange={e=>setNewType(e.target.value)}
-            onKeyDown={e=>e.key==='Enter'&&addType()}
-            placeholder="新しい区分を入力（例：ﾊﾞ）" maxLength={10}
-            style={{flex:1,padding:'7px 10px',border:'1.5px solid #cfd8dc',borderRadius:7,fontSize:13,outline:'none'}}/>
-          <button onClick={addType} style={{...bBtn('#1a237e'),padding:'7px 14px'}}>＋ 追加</button>
-        </div>
-      </div>
-
-      {/* ── スタッフ一覧 ── */}
-      <div style={{display:'flex',alignItems:'center',marginBottom:14,flexWrap:'wrap',gap:8}}>
-        <h2 style={{fontSize:isMb?15:17,fontWeight:800,color:'#1a237e'}}>👥 スタッフ一覧</h2>
-        <span style={{fontSize:12,color:'#90a4ae'}}>{staff.length}名</span>
-        <button onClick={openNew} style={{...bBtn('#1a237e'),marginLeft:'auto'}}>＋ 追加</button>
-      </div>
-
-      {editing&&(
-        <div style={{background:'#e8eaf6',border:'2px solid #9fa8da',borderRadius:10,padding:14,marginBottom:16,animation:'pop .16s ease-out'}}>
-          <div style={{fontWeight:700,fontSize:13,color:'#1a237e',marginBottom:12}}>{editing==='new'?'新規追加':'スタッフ編集'}</div>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'flex-end'}}>
-            <FG label="名前" style={{flex:3,minWidth:120}}>
-              <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} onKeyDown={e=>e.key==='Enter'&&save()} style={INP} placeholder="田中 太郎"/>
-            </FG>
-            <FG label="区分" style={{flex:1,minWidth:80}}>
-              <select value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))} style={SEL}>
-                {types.map(t=><option key={t} value={t}>{t}</option>)}
-              </select>
-            </FG>
-            <div style={{display:'flex',gap:6}}>
-              <button onClick={save} style={bBtn('#1a237e')}>保存</button>
-              <button onClick={()=>setEditing(null)} style={bBtn('#90a4ae')}>キャンセル</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Mobile: cards */}
-      {isMb?(
-        <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {staff.map((s,si)=>(
-            <div key={s.id} style={{background:'#fff',borderRadius:16,border:'1px solid #e8eaed',padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}>
-              <div style={{width:38,height:38,borderRadius:'50%',background:'#1a237e',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:800,fontSize:15,flexShrink:0}}>
-                {s.name.trim()[0]}
-              </div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontWeight:700,fontSize:14,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.name}</div>
-                <div style={{fontSize:11,color:'#90a4ae',marginTop:2}}>
-                  <span style={{background:'#eceff1',padding:'1px 7px',borderRadius:10,color:'#546e7a',fontWeight:600}}>{s.type}</span>
-                </div>
-              </div>
-              <div style={{display:'flex',gap:5}}>
-                <button onClick={()=>openEdit(s)} style={{padding:'6px 12px',background:'#ede7f6',color:'#7986cb',border:'none',borderRadius:20,cursor:'pointer',fontSize:12,fontWeight:700}}>編集</button>
-                <button onClick={()=>del(s.id)} style={{padding:'6px 12px',background:'#fce4ec',color:'#e57373',border:'none',borderRadius:20,cursor:'pointer',fontSize:12,fontWeight:700}}>削除</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ):(
-        /* Desktop: table */
-        <div style={{background:'#fff',borderRadius:10,border:'1px solid #e0e0e0',overflow:'hidden'}}>
-          <table style={{width:'100%',borderCollapse:'collapse'}}>
-            <thead>
-              <tr style={{background:'#263238'}}>
-                {['','名前','区分','操作'].map((h,i)=>(
-                  <th key={i} style={{padding:'9px 12px',textAlign:'left',color:'#b0bec5',fontSize:11,fontWeight:700}}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {staff.map((s,si)=>(
-                <tr key={s.id} style={{borderBottom:'1px solid #f5f5f5',background:si%2===0?'#fff':'#fafafa'}}
-                  onMouseEnter={e=>e.currentTarget.style.background='#f3f4ff'}
-                  onMouseLeave={e=>e.currentTarget.style.background=si%2===0?'#fff':'#fafafa'}>
-                  <td style={{padding:'8px 10px',width:40}}>
-                    <div style={{width:30,height:30,borderRadius:'50%',background:'#1a237e',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:800,fontSize:12}}>{s.name.trim()[0]}</div>
-                  </td>
-                  <td style={{padding:'8px 12px',fontWeight:700,fontSize:13}}>{s.name}</td>
-                  <td style={{padding:'8px 12px'}}>
-                    <span style={{background:'#eceff1',color:'#546e7a',fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:4}}>{s.type}</span>
-                  </td>
-                  <td style={{padding:'8px 12px'}}>
-                    <div style={{display:'flex',gap:5}}>
-                      <button onClick={()=>openEdit(s)} style={{padding:'4px 11px',background:'#ede7f6',color:'#7986cb',border:'none',borderRadius:20,cursor:'pointer',fontSize:11,fontWeight:700}}>編集</button>
-                      <button onClick={()=>del(s.id)} style={{padding:'4px 11px',background:'#fce4ec',color:'#e57373',border:'none',borderRadius:20,cursor:'pointer',fontSize:11,fontWeight:700}}>削除</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── Position Admin ── */
-function PositionAdmin({positions,setPos,req,setReq,isMb}){
-  const [editing,setEditing]=useState(null);
-  const [form,setForm]=useState({name:'',short:'',color:'#1565c0'});
-  const openEdit=p=>{setEditing(p.id);setForm({name:p.name,short:p.short,color:p.color});};
-  const openNew =()=>{setEditing('new');setForm({name:'',short:'',color:'#1565c0'});};
-  const save=()=>{
-    if(!form.name.trim())return;
-    const short=form.short.trim()||form.name.slice(0,3);
-    if(editing==='new'){const id='pos_'+Date.now();setPos(p=>[...p,{id,...form,short}]);}
-    else setPos(p=>p.map(x=>x.id===editing?{...x,...form,short}:x));
-    setEditing(null);
-  };
-  const del=id=>{
-    if(positions.length<=1){alert('ポジションは1つ以上必要です');return;}
-    if(!confirm('このポジションを削除しますか？'))return;
-    setPos(p=>p.filter(x=>x.id!==id));
-    setReq(r=>{const n={...r};delete n[id];return n;});
-  };
-
-  return(
-    <div style={{maxWidth:700}}>
-      <div style={{display:'flex',alignItems:'center',marginBottom:14,gap:8}}>
-        <h2 style={{fontSize:isMb?15:17,fontWeight:800,color:'#1a237e'}}>🏷️ ポジション一覧</h2>
-        <button onClick={openNew} style={{...bBtn('#1a237e'),marginLeft:'auto'}}>＋ 追加</button>
-      </div>
-
-      {editing&&(
-        <div style={{background:'#e8eaf6',border:'2px solid #9fa8da',borderRadius:10,padding:14,marginBottom:16,animation:'pop .16s ease-out'}}>
-          <div style={{fontWeight:700,fontSize:13,color:'#1a237e',marginBottom:12}}>{editing==='new'?'新規追加':'ポジション編集'}</div>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'flex-end'}}>
-            <FG label="ポジション名" style={{flex:2,minWidth:100}}><input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} style={INP} placeholder="カウンター"/></FG>
-            <FG label="短縮名" style={{flex:1,minWidth:80}}><input value={form.short} onChange={e=>setForm(f=>({...f,short:e.target.value}))} style={INP} placeholder="カウ" maxLength={5}/></FG>
-            <FG label="カラー" style={{flex:'none'}}>
-              <div style={{display:'flex',alignItems:'center',gap:6}}>
-                <input type="color" value={form.color} onChange={e=>setForm(f=>({...f,color:e.target.value}))}
-                  style={{width:38,height:34,border:'1.5px solid #ddd',borderRadius:6,cursor:'pointer',padding:2}}/>
-                <div style={{display:'flex',gap:4,flexWrap:'wrap',maxWidth:180}}>
-                  {PRESET_COLORS.map(c=>(
-                    <div key={c} onClick={()=>setForm(f=>({...f,color:c}))}
-                      style={{width:18,height:18,borderRadius:3,background:c,cursor:'pointer',
-                        border:form.color===c?'2px solid #fff':'2px solid transparent',
-                        outline:form.color===c?`2px solid ${c}`:'none'}}/>
-                  ))}
-                </div>
-              </div>
-            </FG>
-            <div style={{display:'flex',gap:6}}>
-              <button onClick={save} style={bBtn('#1a237e')}>保存</button>
-              <button onClick={()=>setEditing(null)} style={bBtn('#90a4ae')}>キャンセル</button>
-            </div>
-          </div>
-          <div style={{marginTop:12,display:'flex',alignItems:'center',gap:8,fontSize:11,color:'#78909c'}}>
-            プレビュー:
-            <span style={{background:form.color,color:'#fff',fontSize:11,fontWeight:700,padding:'2px 9px',borderRadius:4}}>{form.short||form.name}</span>
-            <span style={{background:form.color+'20',color:form.color,fontSize:11,fontWeight:700,padding:'2px 9px',borderRadius:10}}>{form.name}</span>
-          </div>
-        </div>
-      )}
-
-      <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {positions.map((p,pi)=>(
-          <div key={p.id} style={{background:'#fff',borderRadius:16,border:'1px solid #e8eaed',padding:'12px 14px',display:'flex',alignItems:'center',gap:12}}>
-            <div style={{width:36,height:36,borderRadius:8,background:p.color,flexShrink:0,boxShadow:`0 2px 6px ${p.color}50`}}/>
-            <div style={{flex:1}}>
-              <div style={{fontWeight:700,fontSize:isMb?14:15}}>{p.name}</div>
-              <div style={{fontSize:11,color:'#90a4ae',marginTop:2,display:'flex',alignItems:'center',gap:6}}>
-                <span style={{background:p.color,color:'#fff',padding:'1px 7px',borderRadius:10,fontWeight:700}}>{p.short}</span>
-              </div>
-            </div>
-            {/* required count */}
-            <div style={{display:'flex',alignItems:'center',gap:6}}>
-              <button onClick={()=>setReq(r=>({...r,[p.id]:Math.max(0,(r[p.id]||0)-1)}))}
-                style={{width:28,height:28,border:'none',borderRadius:14,cursor:'pointer',background:'#ede7f6',color:'#7986cb',fontWeight:700,fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
-              <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:800,fontSize:15,minWidth:22,textAlign:'center',color:'#5c6bc0'}}>{req[p.id]||0}</span>
-              <button onClick={()=>setReq(r=>({...r,[p.id]:(r[p.id]||0)+1}))}
-                style={{width:28,height:28,border:'none',borderRadius:14,cursor:'pointer',background:'#ede7f6',color:'#7986cb',fontWeight:700,fontSize:16,display:'flex',alignItems:'center',justifyContent:'center'}}>＋</button>
-              <span style={{fontSize:11,color:'#90a4ae'}}>名</span>
-            </div>
-            <div style={{display:'flex',gap:5}}>
-              <button onClick={()=>openEdit(p)} style={{padding:'5px 11px',background:'#ede7f6',color:'#7986cb',border:'none',borderRadius:20,cursor:'pointer',fontSize:11,fontWeight:700}}>編集</button>
-              <button onClick={()=>del(p.id)} style={{padding:'5px 11px',background:'#fce4ec',color:'#e57373',border:'none',borderRadius:20,cursor:'pointer',fontSize:11,fontWeight:700}}>削除</button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ── Prefs Admin ── */
-/* ── Business Hours Admin ── */
-function BizAdmin({bizHours,setBiz,isMb}){
-  const setBizDay=(dow,field,val)=>setBiz(b=>({...b,[dow]:{...b[dow],[field]:val}}));
-
-  const copyAll=(src)=>{
-    const srcBiz=bizHours[src];
-    if(!srcBiz)return;
-    setBiz(b=>{const n={...b};for(let i=0;i<7;i++)if(i!==src)n[i]={...srcBiz};return n;});
-  };
-
-  return(
-    <div style={{maxWidth:700}}>
-      <h2 style={{fontSize:isMb?15:17,fontWeight:800,color:'#1a237e',marginBottom:6}}>⏰ 営業時間設定</h2>
-      <p style={{fontSize:12,color:'#78909c',marginBottom:20}}>
-        営業時間外のスロットはシフト表で斜線（網掛け）表示されます。定休日は全体に斜線が入ります。
-      </p>
-
-      {/* legend */}
-      <div style={{display:'flex',gap:16,flexWrap:'wrap',marginBottom:20,padding:'10px 14px',background:'#fff',borderRadius:9,border:'1px solid #e0e0e0',fontSize:12,color:'#78909c'}}>
-        <span style={{display:'flex',alignItems:'center',gap:7}}>
-          <span style={{width:40,height:14,borderRadius:3,background:'repeating-linear-gradient(135deg,rgba(55,71,79,.16) 0px,rgba(55,71,79,.16) 3px,transparent 3px,transparent 9px)',display:'inline-block',border:'1px solid #b0bec5'}}/>
-          営業時間外（斜線）
-        </span>
-        <span style={{display:'flex',alignItems:'center',gap:7}}>
-          <span style={{width:40,height:14,borderRadius:3,background:'#fff',display:'inline-block',border:'1px solid #b0bec5'}}/>
-          営業時間内（通常表示）
-        </span>
-        <span style={{display:'flex',alignItems:'center',gap:7}}>
-          <span style={{width:40,height:14,borderRadius:3,background:'repeating-linear-gradient(135deg,rgba(55,71,79,.13) 0px,rgba(55,71,79,.13) 3px,transparent 3px,transparent 9px)',display:'inline-block',border:'2px solid rgba(198,40,40,.3)'}}/>
-          定休日（全体斜線）
-        </span>
-      </div>
-
-      <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {JA.map((label,dow)=>{
-          const biz=bizHours[dow]||{open:'09:00',close:'22:00',closed:false};
-          const sat=dow===5,sun=dow===6;
-          return(
-            <div key={dow} style={{
-              background:'#fff',borderRadius:16,
-              border:`2px solid ${biz.closed?'#ffcdd2':'#e8eaf6'}`,
-              padding:'12px 14px',
-              display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',
-            }}>
-              {/* Day label */}
-              <div style={{width:32,textAlign:'center',flexShrink:0}}>
-                <div style={{fontWeight:900,fontSize:20,lineHeight:1,color:sat?'#1565c0':sun?'#c62828':'#263238'}}>{label}</div>
-              </div>
-
-              {/* Closed toggle */}
-              <label style={{display:'flex',alignItems:'center',gap:6,cursor:'pointer',flexShrink:0}}>
-                <input type="checkbox" checked={biz.closed} onChange={e=>setBizDay(dow,'closed',e.target.checked)}
-                  style={{width:16,height:16,cursor:'pointer',accentColor:'#c62828'}}/>
-                <span style={{fontSize:12,fontWeight:700,color:biz.closed?'#c62828':'#90a4ae'}}>定休日</span>
-              </label>
-
-              {/* Time range */}
-              {!biz.closed&&(
-                <div style={{display:'flex',alignItems:'center',gap:8,flex:1,minWidth:200,flexWrap:'wrap'}}>
-                  <span style={{fontSize:11,color:'#78909c',flexShrink:0}}>営業時間</span>
-                  <select value={biz.open} onChange={e=>setBizDay(dow,'open',e.target.value)}
-                    style={{padding:'6px 6px',border:'1.5px solid #c8e6c9',borderRadius:7,fontSize:isMb?14:12,outline:'none',background:'#fff',color:'#263238',fontFamily:"'JetBrains Mono',monospace",cursor:'pointer'}}>
-                    {TOPTS.map(t=><option key={t} value={t}>{t}</option>)}
-                  </select>
-                  <span style={{color:'#90a4ae',fontWeight:700}}>〜</span>
-                  <select value={biz.close} onChange={e=>setBizDay(dow,'close',e.target.value)}
-                    style={{padding:'6px 6px',border:'1.5px solid #c8e6c9',borderRadius:7,fontSize:isMb?14:12,outline:'none',background:'#fff',color:'#263238',fontFamily:"'JetBrains Mono',monospace",cursor:'pointer'}}>
-                    {TOPTS.map(t=><option key={t} value={t}>{t}</option>)}
-                  </select>
-                  <span style={{fontSize:11,color:'#2e7d32',fontWeight:700,fontFamily:"'JetBrains Mono',monospace",background:'#e8f5e9',padding:'3px 8px',borderRadius:5,flexShrink:0}}>
-                    {slotH(t2s(biz.open),t2s(biz.close)).toFixed(1)}h
-                  </span>
-                </div>
-              )}
-              {biz.closed&&(
-                <div style={{fontSize:12,color:'#ef5350',fontWeight:700,flex:1}}>この曜日は定休日（全スロットに斜線表示）</div>
-              )}
-
-              {/* Copy to all */}
-              {!biz.closed&&(
-                <button onClick={()=>copyAll(dow)} style={{padding:'5px 10px',background:'#ede7f6',color:'#7986cb',border:'none',borderRadius:20,cursor:'pointer',fontSize:11,fontWeight:700,flexShrink:0}}>
-                  全曜日にコピー
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/* ── Prefs Admin ── */
-function PrefsAdmin({staff,prefs,setPrefs,posOf,isMb}){
-  const [selStaff,setSelStaff]=useState(staff[0]?.id||null);
-  const [prefMon,setPrefMon]  =useState(mon0(new Date()));
-  const s=staff.find(x=>x.id===selStaff);
-  const prefWeek=useMemo(()=>wk(prefMon),[prefMon]);
-
-  // Normalize pref to always use ranges array
-  const normPref=p=>{
-    if(!p)return null;
-    if(p.ranges) return p;
-    if(p.from) return {...p,ranges:[{from:p.from,to:p.to||p.from}]};
-    return {...p,ranges:[]};
-  };
-
-  const setAvailable=(sid,dateK,available)=>{
-    setPrefs(p=>{const key=`${sid}-${dateK}`;const cur=normPref(p[key])||{};
-      return{...p,[key]:{...cur,available,ranges:cur.ranges||[{from:'10:00',to:'18:00'}]}};
-    });
-  };
-  const clearPref=(sid,dateK)=>{
-    setPrefs(p=>{const n={...p};delete n[`${sid}-${dateK}`];return n;});
-  };
-  const addRange=(sid,dateK)=>{
-    setPrefs(p=>{const key=`${sid}-${dateK}`;const cur=normPref(p[key])||{available:true,ranges:[]};
-      return{...p,[key]:{...cur,ranges:[...(cur.ranges||[]),{from:'10:00',to:'18:00'}]}};
-    });
-  };
-  const removeRange=(sid,dateK,idx)=>{
-    setPrefs(p=>{const key=`${sid}-${dateK}`;const cur=normPref(p[key]);if(!cur)return p;
-      const ranges=cur.ranges.filter((_,i)=>i!==idx);
-      if(ranges.length===0){const n={...p};delete n[key];return n;}
-      return{...p,[key]:{...cur,ranges}};
-    });
-  };
-  const setRange=(sid,dateK,idx,field,val)=>{
-    setPrefs(p=>{const key=`${sid}-${dateK}`;const cur=normPref(p[key]);if(!cur)return p;
-      const ranges=cur.ranges.map((r,i)=>i===idx?{...r,[field]:val}:r);
-      return{...p,[key]:{...cur,ranges}};
-    });
-  };
-  const copyLast=()=>{
-    if(!s)return;
-    const lastMon=new Date(prefMon);lastMon.setDate(lastMon.getDate()-7);
-    const lw=wk(lastMon);
-    setPrefs(p=>{const n={...p};prefWeek.forEach((d,i)=>{const tk=`${s.id}-${dk(d)}`,lk=`${s.id}-${dk(lw[i])}`;if(p[lk])n[tk]={...normPref(p[lk])};});return n;});
-  };
-  const clearWk=()=>{
-    if(!s||!confirm('この週の希望をすべてクリアしますか？'))return;
-    setPrefs(p=>{const n={...p};prefWeek.forEach(d=>delete n[`${s.id}-${dk(d)}`]);return n;});
-  };
-  const weekHasPref=s&&prefWeek.some(d=>prefs[`${s.id}-${dk(d)}`]);
-  const wkLabel=`${prefWeek[0].getMonth()+1}/${prefWeek[0].getDate()} 〜 ${prefWeek[6].getMonth()+1}/${prefWeek[6].getDate()}`;
-
-  return(
-    <div style={{maxWidth:860}}>
-      <h2 style={{fontSize:isMb?15:17,fontWeight:800,color:'#7986cb',marginBottom:4}}>📅 希望シフト管理</h2>
-      <p style={{fontSize:12,color:'#78909c',marginBottom:16}}>スタッフと週を選んで希望時間を設定します。複数の時間帯を追加できます。</p>
-
-      {/* Staff pills */}
-      <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14}}>
-        {staff.map(st=>{
-          const p=posOf(st.pid);
-          const hasAny=Object.keys(prefs).some(k=>k.startsWith(st.id+'-'));
-          return(
-            <button key={st.id} onClick={()=>setSelStaff(st.id)} style={{
-              padding:'6px 11px',border:`2px solid ${selStaff===st.id?p.color:'#e0e0e0'}`,
-              borderRadius:20,cursor:'pointer',fontSize:12,fontWeight:600,
-              background:selStaff===st.id?p.color+'18':'#fff',
-              color:selStaff===st.id?p.color:'#546e7a',
-              display:'flex',alignItems:'center',gap:5,transition:'all .12s',
-            }}>
-              <span style={{width:7,height:7,borderRadius:'50%',background:p.color,display:'inline-block'}}/>
-              {isMb?st.name.split(' ')[0]:st.name}
-              {hasAny&&<span style={{width:5,height:5,borderRadius:'50%',background:'#43a047',display:'inline-block'}}/>}
-            </button>
-          );
-        })}
-      </div>
-
-      {s&&(
-        <div style={{background:'#fff',borderRadius:12,border:'1px solid #e0e0e0',overflow:'hidden'}}>
-          {/* Staff header */}
-          <div style={{background:posOf(s.pid).color,padding:'10px 14px',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
-            <div style={{width:34,height:34,borderRadius:'50%',background:'rgba(255,255,255,.2)',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:800,fontSize:14,flexShrink:0}}>
-              {s.name.trim()[0]}
-            </div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{color:'#fff',fontWeight:800,fontSize:14}}>{s.name}</div>
-              <div style={{color:'rgba(255,255,255,.75)',fontSize:11}}>{s.type} ／ {posOf(s.pid).name}</div>
-            </div>
-            {/* Week nav */}
-            <div style={{display:'flex',alignItems:'center',gap:6,background:'rgba(0,0,0,.18)',borderRadius:8,padding:'5px 10px'}}>
-              <button onClick={()=>setPrefMon(m=>{const d=new Date(m);d.setDate(d.getDate()-7);return d;})}
-                style={{width:24,height:24,border:'none',borderRadius:5,cursor:'pointer',background:'rgba(255,255,255,.2)',color:'#fff',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700}}>‹</button>
-              <span style={{color:'#fff',fontSize:11,fontWeight:700,minWidth:isMb?90:120,textAlign:'center',fontFamily:"'JetBrains Mono',monospace"}}>{wkLabel}</span>
-              <button onClick={()=>setPrefMon(m=>{const d=new Date(m);d.setDate(d.getDate()+7);return d;})}
-                style={{width:24,height:24,border:'none',borderRadius:5,cursor:'pointer',background:'rgba(255,255,255,.2)',color:'#fff',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700}}>›</button>
-            </div>
-            <div style={{display:'flex',gap:5}}>
-              <button onClick={copyLast} style={{padding:'4px 10px',background:'rgba(255,255,255,.2)',border:'none',borderRadius:6,color:'#fff',cursor:'pointer',fontSize:11,fontWeight:700}}>↩ 前週コピー</button>
-              {weekHasPref&&<button onClick={clearWk} style={{padding:'4px 10px',background:'rgba(0,0,0,.2)',border:'none',borderRadius:6,color:'rgba(255,255,255,.8)',cursor:'pointer',fontSize:11,fontWeight:700}}>🗑 クリア</button>}
-            </div>
-          </div>
-
-          {/* Day grid */}
-          <div style={{padding:12,overflowX:'auto',WebkitOverflowScrolling:'touch'}}>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(7, minmax(148px, 1fr))',gap:8,minWidth:isMb?'1050px':'unset'}}>
-              {prefWeek.map((d,i)=>{
-                const dateK=dk(d);
-                const rawPref=prefs[`${s.id}-${dateK}`];
-                const pref=normPref(rawPref);
-                const ranges=pref?.ranges||[];
-                const sat=i===5,sun=i===6;
-                const border=pref?.available===false?'#ffcdd2':pref?.available===true?'#c8e6c9':'#e8eaed';
-                const bg    =pref?.available===false?'#fff5f5':pref?.available===true?'#f6fff6':'#fafafa';
-                return(
-                  <div key={dateK} style={{border:`2px solid ${border}`,borderRadius:10,padding:'10px 8px',background:bg,minHeight:80}}>
-                    {/* Day label + buttons */}
-                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,flexWrap:'wrap',gap:4}}>
-                      <div>
-                        <span style={{fontWeight:900,fontSize:18,color:sat?'#1565c0':sun?'#c62828':'#263238'}}>{JA[i]}</span>
-                        <span style={{fontSize:10,color:'#90a4ae',fontFamily:"'JetBrains Mono',monospace",marginLeft:4}}>{d.getMonth()+1}/{d.getDate()}</span>
-                      </div>
-                      <div style={{display:'flex',gap:3}}>
-                        <button onClick={()=>setAvailable(s.id,dateK,true)} style={{padding:'3px 7px',border:`1.5px solid ${pref?.available===true?'#43a047':'#e0e0e0'}`,borderRadius:10,cursor:'pointer',fontSize:10,fontWeight:700,background:pref?.available===true?'#e8f5e9':'#fff',color:pref?.available===true?'#2e7d32':'#90a4ae'}}>○</button>
-                        <button onClick={()=>setAvailable(s.id,dateK,false)} style={{padding:'3px 7px',border:`1.5px solid ${pref?.available===false?'#ef5350':'#e0e0e0'}`,borderRadius:10,cursor:'pointer',fontSize:10,fontWeight:700,background:pref?.available===false?'#ffebee':'#fff',color:pref?.available===false?'#c62828':'#90a4ae'}}>✕</button>
-                        {pref&&<button onClick={()=>clearPref(s.id,dateK)} style={{padding:'3px 6px',border:'1px solid #e0e0e0',borderRadius:10,cursor:'pointer',fontSize:10,background:'#fff',color:'#b0bec5'}}>－</button>}
-                      </div>
-                    </div>
-
-                    {/* Time ranges */}
-                    {pref?.available===true&&(
-                      <div style={{display:'flex',flexDirection:'column',gap:5}}>
-                        {ranges.map((r,ri)=>(
-                          <div key={ri} style={{background:'#fff',borderRadius:8,padding:'6px 7px',border:'1.5px solid #c8e6c9',display:'flex',flexDirection:'column',gap:3}}>
-                            <div style={{display:'flex',alignItems:'center',gap:4,justifyContent:'space-between'}}>
-                              <span style={{fontSize:9,fontWeight:700,color:'#9575cd',background:'#f3e5f5',padding:'1px 5px',borderRadius:6}}>
-                                {ri+1}回目
-                              </span>
-                              <button onClick={()=>removeRange(s.id,dateK,ri)} style={{width:16,height:16,border:'none',borderRadius:'50%',background:'#ffcdd2',color:'#c62828',cursor:'pointer',fontSize:10,fontWeight:900,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>×</button>
-                            </div>
-                            <div style={{display:'flex',alignItems:'center',gap:3}}>
-                              <select value={r.from||'10:00'} onChange={e=>setRange(s.id,dateK,ri,'from',e.target.value)}
-                                style={{flex:1,padding:'3px 2px',border:'1px solid #c8e6c9',borderRadius:5,fontSize:10,outline:'none',background:'#fff',color:'#263238',fontFamily:"'JetBrains Mono',monospace"}}>
-                                {TOPTS.map(t=><option key={t} value={t}>{t}</option>)}
-                              </select>
-                              <span style={{color:'#90a4ae',fontWeight:700,fontSize:10}}>〜</span>
-                              <select value={r.to||'18:00'} onChange={e=>setRange(s.id,dateK,ri,'to',e.target.value)}
-                                style={{flex:1,padding:'3px 2px',border:'1px solid #c8e6c9',borderRadius:5,fontSize:10,outline:'none',background:'#fff',color:'#263238',fontFamily:"'JetBrains Mono',monospace"}}>
-                                {TOPTS.map(t=><option key={t} value={t}>{t}</option>)}
-                              </select>
-                            </div>
-                            {r.from&&r.to&&t2s(r.to)>t2s(r.from)&&(
-                              <div style={{textAlign:'right',fontSize:9,color:'#2e7d32',fontWeight:800,fontFamily:"'JetBrains Mono',monospace"}}>
-                                {slotH(t2s(r.from),t2s(r.to)).toFixed(1)}h
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                        {ranges.length<5&&(
-                          <button onClick={()=>addRange(s.id,dateK)} style={{
-                            padding:'7px 0',background:'linear-gradient(135deg,#f3e5f5,#ede7f6)',
-                            color:'#9575cd',border:'2px dashed #ce93d8',borderRadius:8,
-                            cursor:'pointer',fontSize:11,fontWeight:800,textAlign:'center',
-                            letterSpacing:'0.02em',
-                          }}>
-                            ＋ 時間帯を追加（{ranges.length}/5）
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    {pref?.available===false&&(
-                      <div style={{textAlign:'center',fontSize:12,color:'#ef5350',fontWeight:700,background:'#ffebee',borderRadius:6,padding:'5px 0'}}>休み希望</div>
-                    )}
-                    {!pref&&<div style={{textAlign:'center',fontSize:11,color:'#c0c0c0',padding:'3px 0'}}>未設定</div>}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── Shift Modal ── */
-/* ══════════════════════ DEPLOY MODAL ══════════════════════ */
-function DeployModal({onClose,isMb}){
-  const [done,setDone]=useState(false);
-
-  const handleDeploy=()=>{
-    // ① HTMLをダウンロード
-    const html='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));
-    a.download='index.html';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    // ② Netlify Dropを別タブで開く
-    window.open('https://app.netlify.com/drop','_blank');
-    setDone(true);
-  };
-
-  const boxStyle=isMb?{
-    position:'fixed',bottom:0,left:0,right:0,background:'#fff',
-    borderRadius:'16px 16px 0 0',padding:'24px 20px 40px',
-    boxShadow:'0 -8px 30px rgba(0,0,0,.2)',animation:'slideUp .22s ease-out',
-  }:{
-    background:'#fff',borderRadius:16,padding:32,width:420,
-    boxShadow:'0 24px 60px rgba(0,0,0,.25)',animation:'pop .16s ease-out',
-  };
-
-  return(
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',display:'flex',
-      alignItems:isMb?'flex-end':'center',justifyContent:'center',zIndex:500,backdropFilter:'blur(4px)'}}
-      onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={boxStyle}>
-        {isMb&&<div style={{width:40,height:4,background:'#e0e0e0',borderRadius:2,margin:'0 auto 16px'}}/>}
-
-        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:20}}>
-          <span style={{fontSize:26}}>🚀</span>
-          <div>
-            <div style={{fontWeight:800,fontSize:18,color:'#1a237e'}}>デプロイ</div>
-            <div style={{fontSize:11,color:'#90a4ae'}}>ファイルをNetlifyにアップロードするだけ</div>
-          </div>
-          <button onClick={onClose} style={{marginLeft:'auto',border:'none',background:'none',cursor:'pointer',fontSize:22,color:'#ccc'}}>×</button>
-        </div>
-
-        {!done?(
-          <>
-            {/* Steps */}
-            <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:24}}>
-              {[
-                {n:'①',icon:'📥',title:'ボタンを押す',desc:'HTMLが自動でダウンロードされ、Netlifyが開きます'},
-                {n:'②',icon:'🖱️',title:'ファイルをドラッグ',desc:'Netlifyの画面にダウンロードしたファイルをドロップ'},
-                {n:'③',icon:'✅',title:'完了！',desc:'数秒で反映されます'},
-              ].map(s=>(
-                <div key={s.n} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 14px',background:'#f8f9ff',borderRadius:9,border:'1px solid #e8eaf6'}}>
-                  <div style={{width:28,height:28,borderRadius:'50%',background:'#1a237e',color:'#fff',fontWeight:900,fontSize:12,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{s.n}</div>
-                  <div style={{fontSize:18,flexShrink:0}}>{s.icon}</div>
-                  <div>
-                    <div style={{fontWeight:700,fontSize:13,color:'#263238'}}>{s.title}</div>
-                    <div style={{fontSize:11,color:'#90a4ae',marginTop:1}}>{s.desc}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <button onClick={handleDeploy} style={{
-              width:'100%',padding:16,border:'none',borderRadius:10,cursor:'pointer',
-              fontWeight:800,fontSize:16,
-              background:'linear-gradient(135deg,#7986cb,#9575cd)',
-              color:'#fff',boxShadow:'0 4px 16px rgba(26,35,126,.35)',
-              display:'flex',alignItems:'center',justifyContent:'center',gap:8,
-            }}>
-              <span>📥</span> HTMLをダウンロード ＋ Netlifyを開く
-            </button>
-          </>
-        ):(
-          <>
-            <div style={{background:'#e8f5e9',border:'2px solid #a5d6a7',borderRadius:10,padding:'16px',marginBottom:20,textAlign:'center'}}>
-              <div style={{fontSize:32,marginBottom:8}}>📥</div>
-              <div style={{fontWeight:800,color:'#2e7d32',fontSize:15,marginBottom:4}}>ダウンロード完了！</div>
-              <div style={{fontSize:12,color:'#4caf50',fontWeight:600}}>Netlifyのタブも開きました</div>
-            </div>
-
-            <div style={{background:'#fff8e1',border:'1px solid #ffcc02',borderRadius:9,padding:'12px 14px',marginBottom:20}}>
-              <div style={{fontWeight:700,color:'#f57f17',fontSize:13,marginBottom:6}}>📌 次のステップ</div>
-              <div style={{fontSize:12,color:'#795548',lineHeight:1.8}}>
-                Netlifyのタブで<br/>
-                <strong>「shift-scheduler.html」をドラッグ＆ドロップ</strong><br/>
-                するだけで公開完了です！
-              </div>
-            </div>
-
-            <div style={{display:'flex',gap:8}}>
-              <button onClick={()=>window.open('https://app.netlify.com/drop','_blank')} style={{
-                flex:1,padding:12,background:'#e8f5e9',color:'#2e7d32',
-                border:'2px solid #a5d6a7',borderRadius:9,fontWeight:700,cursor:'pointer',fontSize:13,
-              }}>🌐 Netlifyをもう一度開く</button>
-              <button onClick={onClose} style={{padding:'12px 16px',background:'#f5f5f5',color:'#78909c',border:'none',borderRadius:9,fontWeight:700,cursor:'pointer'}}>閉じる</button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ── Shift Modal ── */
-function ShiftModal({modal,setModal,positions,staff,save,del,isMb}){
-  const s=staff.find(x=>x.id===modal.sid);
-  const box=isMb?{
-    position:'fixed',bottom:0,left:0,right:0,
-    background:'#fff',borderRadius:'16px 16px 0 0',
-    padding:'20px 20px 32px',
-    boxShadow:'0 -8px 30px rgba(0,0,0,.2)',
-    animation:'slideUp .22s ease-out',
-    maxHeight:'90vh',overflowY:'auto',
-  }:{
-    background:'#fff',borderRadius:14,padding:26,width:390,
-    boxShadow:'0 24px 60px rgba(0,0,0,.25)',animation:'pop .16s ease-out',
-  };
-  const overlay=isMb?{position:'fixed',inset:0,background:'rgba(0,0,0,.4)',zIndex:400,display:'flex',alignItems:'flex-end'}
-    :{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:400,backdropFilter:'blur(4px)'};
-
-  return(
-    <div style={overlay} onClick={e=>e.target===e.currentTarget&&setModal(null)}>
-      <div style={box}>
-        {isMb&&<div style={{width:40,height:4,background:'#e0e0e0',borderRadius:2,margin:'0 auto 16px'}}/>}
-        <div style={{display:'flex',alignItems:'center',marginBottom:4}}>
-          <div style={{width:12,height:12,borderRadius:3,background:(positions.find(p=>p.id===modal.pid)||positions[0])?.color,marginRight:8,flexShrink:0}}/>
-          <span style={{fontWeight:800,fontSize:16}}>{modal.type==='add'?'シフト追加':'シフト編集'}</span>
-          <button onClick={()=>setModal(null)} style={{marginLeft:'auto',border:'none',background:'none',cursor:'pointer',fontSize:22,color:'#ccc',lineHeight:1}}>×</button>
-        </div>
-        <div style={{fontSize:12,color:'#90a4ae',marginBottom:16}}>{s?.name} — {modal.dk}</div>
-
-        <div style={{fontSize:11,fontWeight:700,color:'#78909c',marginBottom:6}}>ポジション</div>
-        <div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:16}}>
-          {positions.map(p=>(
-            <button key={p.id} onClick={()=>setModal(m=>({...m,pid:p.id}))} style={{
-              padding:'6px 11px',border:`2px solid ${modal.pid===p.id?p.color:'#e0e0e0'}`,
-              borderRadius:20,cursor:'pointer',fontSize:12,fontWeight:700,
-              background:modal.pid===p.id?p.color:'#fff',color:modal.pid===p.id?'#fff':'#546e7a',
-            }}>{p.name}</button>
-          ))}
-        </div>
-
-        <div style={{fontSize:11,fontWeight:700,color:'#78909c',marginBottom:6}}>勤務時間</div>
-        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
-          <select value={s2t(modal.s)} onChange={e=>setModal(m=>({...m,s:t2s(e.target.value)}))}
-            style={{flex:1,padding:'10px 6px',border:'1.5px solid #cfd8dc',borderRadius:8,fontSize:isMb?15:13,outline:'none',fontFamily:"'JetBrains Mono',monospace",color:'#263238',background:'#fff'}}>
-            {TOPTS.map(t=><option key={t} value={t}>{t}</option>)}
-          </select>
-          <span style={{color:'#90a4ae',fontWeight:700,fontSize:18}}>〜</span>
-          <select value={s2t(modal.e)} onChange={e=>setModal(m=>({...m,e:t2s(e.target.value)}))}
-            style={{flex:1,padding:'10px 6px',border:'1.5px solid #cfd8dc',borderRadius:8,fontSize:isMb?15:13,outline:'none',fontFamily:"'JetBrains Mono',monospace",color:'#263238',background:'#fff'}}>
-            {TOPTS.map(t=><option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
-        {modal.e>modal.s&&(
-          <div style={{textAlign:'center',fontSize:14,color:'#1565c0',fontWeight:800,fontFamily:"'JetBrains Mono',monospace",marginBottom:12}}>
-            {s2t(modal.s)} 〜 {s2t(modal.e)} ／ {slotH(modal.s,modal.e).toFixed(1)}時間
-          </div>
-        )}
-
-        <div style={{fontSize:11,fontWeight:700,color:'#78909c',marginBottom:6}}>休憩時間</div>
-        <div style={{display:'flex',gap:5,marginBottom:20}}>
-          {[0,15,30,45,60].map(m=>(
-            <button key={m} onClick={()=>setModal(x=>({...x,brk:m}))} style={{
-              flex:1,padding:'8px 0',border:`1.5px solid ${modal.brk===m?'#7986cb':'#e0e0e0'}`,
-              borderRadius:20,cursor:'pointer',fontSize:isMb?13:12,fontWeight:600,
-              background:modal.brk===m?'#ede7f6':'#fff',color:modal.brk===m?'#5c6bc0':'#78909c',
-            }}>{m}分</button>
-          ))}
-        </div>
-
-        <div style={{display:'flex',gap:8}}>
-          <button onClick={save} style={{flex:1,padding:isMb?14:12,background:'linear-gradient(135deg,#5c6bc0,#9575cd)',color:'#fff',border:'none',borderRadius:20,fontWeight:700,fontSize:isMb?15:14,cursor:'pointer'}}>保存</button>
-          {modal.type==='edit'&&<button onClick={del} style={{padding:isMb?'14px 16px':'12px 14px',background:'#fce4ec',color:'#c62828',border:'none',borderRadius:20,fontWeight:700,cursor:'pointer',fontSize:isMb?15:13}}>削除</button>}
-          <button onClick={()=>setModal(null)} style={{padding:isMb?'14px 16px':'12px 14px',background:'#f5f5f5',color:'#78909c',border:'none',borderRadius:20,fontWeight:700,cursor:'pointer'}}>戻る</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── Shared helpers ── */
-const INP={width:'100%',padding:'8px 10px',border:'1.5px solid #ddd',borderRadius:7,fontSize:13,outline:'none',background:'#fff',color:'#263238'};
-const SEL={padding:'8px 6px',border:'1.5px solid #ddd',borderRadius:7,fontSize:13,outline:'none',background:'#fff',color:'#263238',width:'100%'};
-const bBtn=bg=>({padding:'8px 16px',background:bg,color:'#fff',border:'none',borderRadius:20,cursor:'pointer',fontSize:12,fontWeight:700});
-function FG({label,children,style}){return<div style={{display:'flex',flexDirection:'column',gap:4,...style}}><label style={{fontSize:11,fontWeight:700,color:'#78909c'}}>{label}</label>{children}</div>;}
-function HBtn({onClick,children}){
-  return<button onClick={onClick}
-    onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.28)'}
-    onMouseLeave={e=>e.currentTarget.style.background='rgba(255,255,255,.15)'}
-    style={{padding:'5px 12px',border:'1px solid rgba(255,255,255,.25)',borderRadius:20,cursor:'pointer',fontSize:13,fontWeight:600,background:'rgba(255,255,255,.15)',color:'#fff',minWidth:28,display:'flex',alignItems:'center',justifyContent:'center',transition:'background .15s'}}>
-    {children}
-  </button>;
-}
-
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+function fmtDate(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function toTime(m)  { return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; }
+function snap(m)    { return Math.round(m / 15) * 15; }
 </script>
 </body>
 </html>
