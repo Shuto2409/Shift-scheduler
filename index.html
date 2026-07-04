@@ -9,12 +9,12 @@
 :root {
   --bg:          #f6f8fa;
   --surface:     #ffffff;
-  --surface2:    #f6f8fa;
+  --surface2:    #f0f3f6;
   --border:      #d0d7de;
   --border2:     #e8ecef;
   --text:        #1f2328;
   --text-muted:  #656d76;
-  --text-dim:    #c8cdd2;
+  --text-dim:    #c4cdd5;
   --accent:      #7c3aed;
   --accent-soft: rgba(124,58,237,.08);
   --danger:      #cf222e;
@@ -24,21 +24,15 @@
   --weekend-bg:  rgba(0,0,0,.018);
   --desired-bg:  #94a3b8;
 
-  --label-w:     148px;
-  --hour-w:      64px;
-  --day-w:       calc(var(--hour-w) * 24);
-  --row-h:       46px;
-  --topbar-h:    54px;
-  --day-label-h: 30px;
-  --hour-label-h:26px;
-  --time-h:      calc(var(--day-label-h) + var(--hour-label-h));
-  --grade-h:     28px;
-  --daynav-h:    52px;
-
-  --g4: #7c3aed;
-  --g3: #059669;
-  --g2: #2563eb;
-  --g1: #ea580c;
+  --label-w:      148px;
+  --hour-w:       64px;
+  --day-w:        calc(var(--hour-w) * 24);
+  --row-h:        44px;
+  --topbar-h:     54px;
+  --dh-h:         40px;   /* day block header */
+  --tr-h:         26px;   /* time row */
+  --grade-h:      26px;
+  --daynav-h:     52px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -57,17 +51,17 @@ body {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center; gap: 8px; padding: 0 14px;
-  flex-shrink: 0; z-index: 200;
+  flex-shrink: 0; z-index: 300;
   box-shadow: 0 1px 3px rgba(0,0,0,.06);
 }
-#topbar h1 { font-size: .95rem; font-weight: 700; white-space: nowrap; color: var(--text); }
+#topbar h1 { font-size: .95rem; font-weight: 700; white-space: nowrap; }
 .tb-btn {
   background: var(--surface); border: 1px solid var(--border);
   color: var(--text); padding: 5px 12px; border-radius: 7px;
   cursor: pointer; font-size: .82rem; font-weight: 500; white-space: nowrap;
 }
 .tb-btn:hover { background: var(--surface2); }
-#week-range { font-size: .88rem; font-weight: 700; min-width: 160px; text-align: center; color: var(--text); }
+#week-range { font-size: .88rem; font-weight: 700; min-width: 160px; text-align: center; }
 .this-week-btn {
   background: var(--accent-soft); border: 1px solid rgba(124,58,237,.3);
   color: var(--accent); padding: 5px 12px; border-radius: 7px;
@@ -100,92 +94,165 @@ body {
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
 
 /* ── GANTT WRAPPER ── */
-#gantt-wrapper { flex: 1; overflow: auto; padding-bottom: var(--daynav-h); }
+#gantt-wrapper {
+  flex: 1;
+  overflow: auto;
+  padding-bottom: var(--daynav-h);
+  background: var(--bg);
+}
 
 /* ── GANTT ── */
 #gantt {
-  display: flex; flex-direction: column;
-  min-width: calc(var(--label-w) + var(--day-w) * 7);
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: calc(var(--label-w) + var(--day-w));
 }
 
-/* ── TIME HEADER ── */
-#time-header {
-  position: sticky; top: 0; z-index: 50;
-  display: flex; height: var(--time-h);
+/* ── DAY BLOCK ── */
+.day-block {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 3px solid var(--border);
+}
+
+/* ── DAY BLOCK HEADER (sticky per section) ── */
+.day-block-header {
+  position: sticky;
+  top: 0;
+  z-index: 55;
+  height: var(--dh-h);
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 10px;
+  min-width: calc(var(--label-w) + var(--day-w));
+}
+.day-block-header.is-today {
+  background: linear-gradient(90deg, rgba(124,58,237,.1) 0%, rgba(124,58,237,.03) 100%);
+  border-bottom-color: rgba(124,58,237,.3);
+}
+.day-block-header.is-sat { background: rgba(37,99,235,.05); }
+.day-block-header.is-sun { background: rgba(207,34,46,.05); }
+.dh-name {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+.dh-date {
+  font-size: .82rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.dh-today-badge {
+  font-size: .67rem; font-weight: 700;
+  background: var(--accent); color: #fff;
+  border-radius: 4px; padding: 2px 6px;
+}
+.dh-shift-count {
+  margin-left: auto;
+  font-size: .75rem;
+  color: var(--text-muted);
   background: var(--surface);
-  border-bottom: 2px solid var(--border);
-  box-shadow: 0 2px 4px rgba(0,0,0,.05);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 2px 8px;
 }
-.th-spacer {
-  width: var(--label-w); flex-shrink: 0;
-  position: sticky; left: 0; z-index: 60;
-  background: var(--surface); border-right: 2px solid var(--border);
-  display: flex; align-items: center; justify-content: center;
-  flex-direction: column; gap: 2px;
-}
-.th-spacer span { font-size: .68rem; color: var(--text-dim); }
-.th-day {
-  width: var(--day-w); flex-shrink: 0;
-  display: flex; flex-direction: column;
-  border-right: 1px solid var(--border);
-}
-.th-day.is-today .th-day-label { background: var(--accent-soft); }
-.th-day.is-sat .th-day-label { background: rgba(37,99,235,.04); }
-.th-day.is-sun .th-day-label { background: rgba(207,34,46,.04); }
-.th-day-label {
-  height: var(--day-label-h); display: flex; align-items: center;
-  padding: 0 10px; gap: 6px; border-bottom: 1px solid var(--border2);
+.is-today .dh-name { color: var(--accent); }
+.is-sat .dh-name   { color: #2563eb; }
+.is-sun .dh-name   { color: #cf222e; }
+
+/* ── TIME ROW ── */
+.time-row {
+  position: sticky;
+  top: var(--dh-h);
+  z-index: 45;
+  display: flex;
+  height: var(--tr-h);
   background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
-.th-day-name { font-size: .85rem; font-weight: 700; color: var(--text); }
-.th-day-date { font-size: .75rem; color: var(--text-muted); }
-.th-today-badge {
-  margin-left: auto; font-size: .67rem; font-weight: 700;
-  background: var(--accent); color: #fff; border-radius: 4px; padding: 1px 5px;
+.tr-spacer {
+  width: var(--label-w);
+  flex-shrink: 0;
+  position: sticky;
+  left: 0;
+  z-index: 46;
+  background: var(--surface);
+  border-right: 2px solid var(--border);
 }
-.th-day.is-sat .th-day-name { color: #2563eb; }
-.th-day.is-sun .th-day-name { color: #cf222e; }
-.th-hours { flex: 1; display: flex; background: var(--surface); }
-.th-hour {
-  width: var(--hour-w); flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: .68rem; color: var(--text-dim);
-  border-right: 1px solid var(--border2); user-select: none;
+.tr-hours { display: flex; flex: 1; }
+.tr-hour {
+  width: var(--hour-w);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .67rem;
+  color: var(--text-dim);
+  border-right: 1px solid var(--border2);
+  user-select: none;
 }
-.th-hour.h0 { color: var(--text-muted); font-weight: 600; }
+.tr-hour.h0 { color: var(--text-muted); font-weight: 600; }
 
 /* ── GRADE GROUP ── */
 .grade-group { display: flex; flex-direction: column; }
 .grade-header {
-  position: sticky; top: var(--time-h); z-index: 40;
-  display: flex; height: var(--grade-h);
+  position: sticky;
+  top: calc(var(--dh-h) + var(--tr-h));
+  z-index: 35;
+  display: flex;
+  height: var(--grade-h);
   background: var(--surface2);
-  border-top: 2px solid var(--border); border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border2);
 }
 .grade-label {
-  width: var(--label-w); flex-shrink: 0;
-  position: sticky; left: 0; z-index: 45;
-  background: var(--surface2); border-right: 2px solid var(--border);
-  display: flex; align-items: center; padding-left: 14px;
-  font-size: .73rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  width: var(--label-w);
+  flex-shrink: 0;
+  position: sticky;
+  left: 0;
+  z-index: 36;
+  background: var(--surface2);
+  border-right: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding-left: 14px;
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
 .grade-line-row { flex: 1; display: flex; align-items: center; }
-.grade-line { height: 2px; width: 100%; opacity: .25; margin: 0 12px; border-radius: 2px; }
-.g4 .grade-label { color: var(--g4); } .g4 .grade-line { background: var(--g4); }
-.g3 .grade-label { color: var(--g3); } .g3 .grade-line { background: var(--g3); }
-.g2 .grade-label { color: var(--g2); } .g2 .grade-line { background: var(--g2); }
-.g1 .grade-label { color: var(--g1); } .g1 .grade-line { background: var(--g1); }
+.grade-line { height: 1.5px; width: 100%; opacity: .2; margin: 0 12px; border-radius: 2px; }
+.g4 .grade-label { color: #7c3aed; } .g4 .grade-line { background: #7c3aed; }
+.g3 .grade-label { color: #059669; } .g3 .grade-line { background: #059669; }
+.g2 .grade-label { color: #2563eb; } .g2 .grade-line { background: #2563eb; }
+.g1 .grade-label { color: #ea580c; } .g1 .grade-line { background: #ea580c; }
 
 /* ── MEMBER ROW ── */
-.member-row { display: flex; height: var(--row-h); border-bottom: 1px solid var(--border2); background: var(--surface); }
-.member-row:last-child { border-bottom: 1px solid var(--border); }
+.member-row {
+  display: flex;
+  height: var(--row-h);
+  border-bottom: 1px solid var(--border2);
+  background: var(--surface);
+}
+.member-row:last-child { border-bottom: none; }
 .member-label {
-  width: var(--label-w); flex-shrink: 0;
-  position: sticky; left: 0; z-index: 20;
-  background: var(--surface); border-right: 2px solid var(--border);
-  display: flex; align-items: center; gap: 8px; padding: 0 10px;
-  cursor: pointer; transition: background .12s; user-select: none;
+  width: var(--label-w);
+  flex-shrink: 0;
+  position: sticky;
+  left: 0;
+  z-index: 20;
+  background: var(--surface);
+  border-right: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  cursor: pointer;
+  transition: background .12s;
+  user-select: none;
 }
 .member-label:hover { background: var(--surface2); }
 .avatar {
@@ -193,72 +260,113 @@ body {
   display: flex; align-items: center; justify-content: center;
   font-size: .72rem; font-weight: 700; flex-shrink: 0;
 }
-.member-name { font-size: .83rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.member-name {
+  font-size: .83rem; font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* ── ROW GRID ── */
-.row-grid { flex: 1; position: relative; display: flex; overflow: hidden; }
+.row-grid {
+  flex: 1;
+  position: relative;
+  display: flex;
+  overflow: hidden;
+}
 .row-grid.mode-confirmed { cursor: crosshair; }
 .row-grid.mode-desired   { cursor: pointer; }
-.day-col { width: var(--day-w); flex-shrink: 0; height: 100%; display: flex; border-right: 1px solid var(--border); }
-.day-col.is-today   { background: var(--today-bg); }
-.day-col.is-weekend { background: var(--weekend-bg); }
-.hour-cell { width: var(--hour-w); flex-shrink: 0; border-right: 1px solid var(--border2); height: 100%; }
+.hour-cell {
+  width: var(--hour-w);
+  flex-shrink: 0;
+  border-right: 1px solid var(--border2);
+  height: 100%;
+}
+.hour-cell.is-today-bg { background: var(--today-bg); }
+.hour-cell.is-weekend-bg { background: var(--weekend-bg); }
 
 /* ── SHIFT BAR ── */
 .shift-bar {
-  position: absolute; top: 5px; height: calc(100% - 10px);
-  border-radius: 6px; display: flex; align-items: center;
-  padding: 0 8px; font-size: .72rem; font-weight: 600;
-  overflow: hidden; white-space: nowrap; cursor: pointer;
-  z-index: 5; box-shadow: 0 1px 4px rgba(0,0,0,.15);
+  position: absolute;
+  top: 5px;
+  height: calc(100% - 10px);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: .71rem;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: pointer;
+  z-index: 5;
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.15);
   transition: opacity .12s, transform .1s;
 }
 .shift-bar:hover { opacity: .82; transform: scaleY(1.06); }
-.shift-bar.confirmed { color: #fff; }
-.shift-bar.desired   {
+.shift-bar.desired {
   background: var(--desired-bg) !important;
-  color: #fff; opacity: .85;
-  border: 1.5px solid rgba(100,116,139,.4);
+  border: 1.5px solid rgba(100,116,139,.35);
 }
-.shift-time { font-size: .68rem; opacity: .9; }
+.shift-time { font-size: .67rem; opacity: .9; }
 
-/* ── DRAG PREVIEW (確定のみ) ── */
+/* ── DRAG PREVIEW ── */
 .drag-preview {
-  position: absolute; top: 5px; height: calc(100% - 10px);
-  border-radius: 6px; pointer-events: none; z-index: 20;
-  opacity: .55; border: 2px dashed rgba(255,255,255,.7);
-  display: flex; align-items: center; padding: 0 8px;
-  font-size: .72rem; font-weight: 600; color: #fff;
+  position: absolute;
+  top: 5px;
+  height: calc(100% - 10px);
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 20;
+  opacity: .5;
+  border: 2px dashed rgba(255,255,255,.8);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: .71rem;
+  font-weight: 600;
+  color: #fff;
 }
-
-/* ── DESIRED HINT (クリックできることを示す) ── */
-.day-col:hover .desired-hint { opacity: 1; }
-.desired-hint { display: none; }
 
 /* ── NOW LINE ── */
 .now-line {
-  position: absolute; top: 0; bottom: 0; width: 2px;
-  background: var(--danger); z-index: 10; pointer-events: none;
-  box-shadow: 0 0 4px rgba(207,34,46,.4);
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 2px;
+  background: var(--danger);
+  z-index: 10;
+  pointer-events: none;
+  box-shadow: 0 0 4px rgba(207,34,46,.35);
 }
 .now-line::before {
-  content: ''; position: absolute; top: -1px; left: -4px;
-  width: 10px; height: 10px; background: var(--danger); border-radius: 50%;
+  content: '';
+  position: absolute;
+  top: -1px; left: -4px;
+  width: 10px; height: 10px;
+  background: var(--danger);
+  border-radius: 50%;
 }
 
 /* ── DAY NAVIGATOR ── */
 #day-nav {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  height: var(--daynav-h); background: var(--surface);
-  border-top: 1px solid var(--border); display: flex; z-index: 150;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: var(--daynav-h);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  z-index: 200;
   box-shadow: 0 -1px 4px rgba(0,0,0,.06);
 }
 .dnav-btn {
-  flex: 1; display: flex; flex-direction: column;
+  flex: 1;
+  display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 1px;
-  cursor: pointer; border: none; border-right: 1px solid var(--border2);
-  background: transparent; color: var(--text-muted);
-  transition: background .12s; padding: 5px 2px;
+  cursor: pointer;
+  border: none; border-right: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text-muted);
+  transition: background .12s;
+  padding: 5px 2px;
 }
 .dnav-btn:last-child { border-right: none; }
 .dnav-btn:hover  { background: var(--surface2); }
@@ -285,12 +393,11 @@ body {
   padding: 13px 14px 11px; font-size: .92rem; font-weight: 700;
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between;
-  background: var(--surface);
 }
 #member-list { flex: 1; overflow-y: auto; padding: 9px; display: flex; flex-direction: column; gap: 5px; }
 .mc { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 9px 10px; display: flex; align-items: center; gap: 8px; }
 .mc-info { flex: 1; min-width: 0; }
-.mc-name  { font-size: .85rem; font-weight: 500; color: var(--text); }
+.mc-name  { font-size: .85rem; font-weight: 500; }
 .mc-grade { font-size: .73rem; color: var(--text-muted); }
 .small-btn {
   width: 26px; height: 26px; border-radius: 6px;
@@ -308,21 +415,13 @@ body {
 #add-member-btn:hover { background: rgba(124,58,237,.14); }
 
 /* ── MODALS ── */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 300; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 400; }
 .modal-overlay.hidden { display: none; }
-.modal-box {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: 14px; padding: 24px; width: min(380px, 94vw);
-  box-shadow: 0 20px 50px rgba(0,0,0,.15);
-}
-.modal-box h3 { font-size: .98rem; margin-bottom: 16px; color: var(--text); }
+.modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px; width: min(380px, 94vw); box-shadow: 0 20px 50px rgba(0,0,0,.15); }
+.modal-box h3 { font-size: .98rem; margin-bottom: 16px; }
 .form-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
 .form-row label { font-size: .78rem; color: var(--text-muted); font-weight: 500; }
-.form-row input, .form-row select {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 7px; padding: 8px 10px; color: var(--text);
-  font-size: .87rem; outline: none; width: 100%;
-}
+.form-row input, .form-row select { background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; color: var(--text); font-size: .87rem; outline: none; width: 100%; }
 .form-row input:focus, .form-row select:focus { border-color: var(--accent); background: var(--surface); }
 .form-row input[type=color] { padding: 3px; height: 38px; cursor: pointer; }
 .form-row input[type=time]  { font-size: .95rem; font-weight: 500; }
@@ -330,50 +429,33 @@ body {
 .btn { padding: 8px 16px; border-radius: 7px; border: none; cursor: pointer; font-size: .85rem; font-weight: 600; }
 .btn-primary { background: var(--accent); color: #fff; }
 .btn-primary:hover { opacity: .9; }
-.btn-blue { background: #2563eb; color: #fff; }
-.btn-blue:hover { opacity: .9; }
 .btn-gray { background: #64748b; color: #fff; }
 .btn-gray:hover { opacity: .9; }
 .btn-danger { background: var(--danger); color: #fff; }
 .btn-danger:hover { opacity: .9; }
 .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
 .btn-ghost:hover { background: var(--border2); }
-
-/* ── 希望シフト入力モーダル ── */
-.dm-info {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 8px; padding: 10px 12px; margin-bottom: 16px;
-  font-size: .85rem; color: var(--text-muted);
-}
+.dm-info { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
 .dm-info strong { color: var(--text); font-size: .92rem; display: block; margin-bottom: 2px; }
-.time-row { display: flex; gap: 10px; align-items: flex-end; }
-.time-row .form-row { flex: 1; margin-bottom: 0; }
+.dm-info span   { font-size: .82rem; color: var(--text-muted); }
+.time-row-inputs { display: flex; gap: 10px; align-items: flex-end; }
+.time-row-inputs .form-row { flex: 1; margin-bottom: 0; }
 .time-sep { font-size: 1rem; color: var(--text-muted); padding-bottom: 8px; }
 
 /* ── SHIFT POPUP ── */
-#shift-popup {
-  position: fixed; background: var(--surface); border: 1px solid var(--border);
-  border-radius: 12px; padding: 14px; min-width: 224px; z-index: 250;
-  box-shadow: 0 8px 30px rgba(0,0,0,.12); display: none;
-}
+#shift-popup { position: fixed; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; min-width: 224px; z-index: 350; box-shadow: 0 8px 30px rgba(0,0,0,.12); display: none; }
 #shift-popup.visible { display: block; }
-#shift-popup h4 { font-size: .9rem; margin-bottom: 3px; color: var(--text); }
+#shift-popup h4 { font-size: .9rem; margin-bottom: 3px; }
 .popup-meta { font-size: .78rem; color: var(--text-muted); margin-bottom: 10px; }
 .popup-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 11px; }
 
 /* ── TOAST ── */
-#toast {
-  position: fixed; bottom: calc(var(--daynav-h) + 14px); left: 50%; transform: translateX(-50%);
-  background: var(--text); color: var(--surface); border-radius: 9px; padding: 8px 18px;
-  font-size: .87rem; box-shadow: 0 4px 20px rgba(0,0,0,.2); z-index: 400;
-  opacity: 0; transition: opacity .25s; pointer-events: none; white-space: nowrap;
-}
+#toast { position: fixed; bottom: calc(var(--daynav-h) + 14px); left: 50%; transform: translateX(-50%); background: var(--text); color: var(--surface); border-radius: 9px; padding: 8px 18px; font-size: .87rem; box-shadow: 0 4px 20px rgba(0,0,0,.2); z-index: 500; opacity: 0; transition: opacity .25s; pointer-events: none; white-space: nowrap; }
 #toast.show { opacity: 1; }
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 </style>
 </head>
 <body>
@@ -391,7 +473,7 @@ body {
     <button class="mode-btn active m-confirmed" id="btn-confirmed" onclick="setMode('confirmed')">✓ 確定</button>
     <button class="mode-btn m-desired"           id="btn-desired"   onclick="setMode('desired')">◎ 希望</button>
   </div>
-  <button class="icon-btn" onclick="toggleMemberPanel()" title="メンバー管理">👥</button>
+  <button class="icon-btn" onclick="toggleMemberPanel()">👥</button>
 </div>
 
 <div id="gantt-wrapper">
@@ -410,7 +492,7 @@ body {
   <div id="add-member-btn" onclick="openAddMember()">＋ メンバーを追加</div>
 </div>
 
-<!-- メンバー編集モーダル -->
+<!-- メンバー編集 -->
 <div class="modal-overlay hidden" id="member-modal">
   <div class="modal-box">
     <h3 id="member-modal-title">メンバーを追加</h3>
@@ -418,10 +500,8 @@ body {
     <div class="form-row">
       <label>学年</label>
       <select id="m-grade">
-        <option value="4">4年生</option>
-        <option value="3">3年生</option>
-        <option value="2">2年生</option>
-        <option value="1" selected>1年生</option>
+        <option value="4">4年生</option><option value="3">3年生</option>
+        <option value="2">2年生</option><option value="1" selected>1年生</option>
       </select>
     </div>
     <div class="form-row"><label>カラー</label><input id="m-color" type="color" value="#7c3aed" /></div>
@@ -433,7 +513,7 @@ body {
   </div>
 </div>
 
-<!-- 希望シフト入力モーダル -->
+<!-- 希望シフト入力 -->
 <div class="modal-overlay hidden" id="desired-modal">
   <div class="modal-box">
     <h3>◎ 希望シフトを入力</h3>
@@ -441,16 +521,10 @@ body {
       <strong id="dm-member"></strong>
       <span id="dm-date"></span>
     </div>
-    <div class="time-row">
-      <div class="form-row">
-        <label>開始時間</label>
-        <input id="dm-start" type="time" step="900" />
-      </div>
+    <div class="time-row-inputs">
+      <div class="form-row"><label>開始時間</label><input id="dm-start" type="time" step="900" /></div>
       <span class="time-sep">〜</span>
-      <div class="form-row">
-        <label>終了時間</label>
-        <input id="dm-end" type="time" step="900" />
-      </div>
+      <div class="form-row"><label>終了時間</label><input id="dm-end" type="time" step="900" /></div>
     </div>
     <div class="form-row" style="margin-top:12px"><label>メモ（任意）</label><input id="dm-note" type="text" placeholder="備考など..." /></div>
     <div class="modal-actions">
@@ -482,7 +556,8 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const GRADE_COLORS = { 4:'#7c3aed', 3:'#059669', 2:'#2563eb', 1:'#ea580c' };
 const GRADE_LABELS = { 4:'4年生', 3:'3年生', 2:'2年生', 1:'1年生' };
 const DAY_NAMES    = ['月','火','水','木','金','土','日'];
-const HOUR_W = 64, DAY_W = HOUR_W * 24, LABEL_W = 148;
+const DAY_NAMES_FULL = ['月曜日','火曜日','水曜日','木曜日','金曜日','土曜日','日曜日'];
+const HOUR_W = 64, LABEL_W = 148;
 
 // ── State ──────────────────────────────────────────────────────
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -490,7 +565,7 @@ let weekStart = getWeekStart(new Date());
 let members = [], shifts = [];
 let inputMode = 'confirmed';
 let activeShiftId = null, editingMemberId = null, channel = null;
-let desiredCtx = null; // { member, date }
+let desiredCtx = null;
 
 // ── Boot ───────────────────────────────────────────────────────
 setSyncStatus('connecting');
@@ -505,7 +580,7 @@ document.addEventListener('keydown', e => {
     if (e.key === 'ArrowRight') nextWeek();
   }
 });
-document.getElementById('gantt-wrapper').addEventListener('scroll', updateActiveDayTab, { passive: true });
+document.getElementById('gantt-wrapper').addEventListener('scroll', onScroll, { passive: true });
 document.addEventListener('click', e => {
   if (!document.getElementById('shift-popup').contains(e.target)) closePopup();
 });
@@ -545,8 +620,7 @@ function onShiftChange(p) {
     if (p.new.date >= s0 && p.new.date <= e0) { shifts.push(p.new); renderGantt(); }
   } else if (p.eventType === 'UPDATE') {
     const i = shifts.findIndex(s => s.id === p.new.id);
-    if (i >= 0) shifts[i] = p.new;
-    else if (p.new.date >= s0 && p.new.date <= e0) shifts.push(p.new);
+    if (i >= 0) shifts[i] = p.new; else if (p.new.date >= s0 && p.new.date <= e0) shifts.push(p.new);
     renderGantt();
   } else if (p.eventType === 'DELETE') {
     shifts = shifts.filter(s => s.id !== p.old.id);
@@ -562,77 +636,97 @@ function renderGantt() {
   gantt.innerHTML = '';
   const dates    = weekDates();
   const todayStr = fmtDate(new Date());
-  gantt.appendChild(buildTimeHeader(dates, todayStr));
-  [4,3,2,1].forEach(g => {
-    const gm = members.filter(m => m.grade === g);
-    if (gm.length) gantt.appendChild(buildGradeGroup(g, gm, dates, todayStr));
+
+  dates.forEach((date, i) => {
+    gantt.appendChild(buildDayBlock(date, i, todayStr));
   });
+
   updateWeekRange();
   renderDayNav();
   setTimeout(drawNowLines, 50);
 }
 
-function buildTimeHeader(dates, todayStr) {
-  const el = document.createElement('div');
-  el.id = 'time-header';
-  const sp = document.createElement('div');
-  sp.className = 'th-spacer';
-  sp.innerHTML = '<span>名前</span><span>↕ 時間 →</span>';
-  el.appendChild(sp);
-  dates.forEach((d, i) => {
-    const isToday = fmtDate(d) === todayStr;
-    const isSat = i === 5, isSun = i === 6;
-    const day = document.createElement('div');
-    day.className = 'th-day'+(isToday?' is-today':'')+(isSat?' is-sat':'')+(isSun?' is-sun':'');
-    const lbl = document.createElement('div');
-    lbl.className = 'th-day-label';
-    lbl.innerHTML = `<span class="th-day-name">${DAY_NAMES[i]}</span><span class="th-day-date">${d.getMonth()+1}/${d.getDate()}</span>${isToday?'<span class="th-today-badge">TODAY</span>':''}`;
-    day.appendChild(lbl);
-    const hrs = document.createElement('div');
-    hrs.className = 'th-hours';
-    for (let h = 0; h < 24; h++) {
-      const hel = document.createElement('div');
-      hel.className = 'th-hour'+(h===0?' h0':'');
-      hel.textContent = h === 0 ? '0:00' : h;
-      hrs.appendChild(hel);
-    }
-    day.appendChild(hrs);
-    el.appendChild(day);
+function buildDayBlock(date, dayIdx, todayStr) {
+  const dateStr  = fmtDate(date);
+  const isToday  = dateStr === todayStr;
+  const isSat    = dayIdx === 5;
+  const isSun    = dayIdx === 6;
+
+  const block = document.createElement('div');
+  block.className = 'day-block';
+  block.dataset.dayIdx = dayIdx;
+
+  // ── Day header ──
+  const header = document.createElement('div');
+  header.className = 'day-block-header' + (isToday?' is-today':'') + (isSat?' is-sat':'') + (isSun?' is-sun':'');
+  const dayShiftCount = shifts.filter(s => s.date === dateStr).length;
+  header.innerHTML = `
+    <span class="dh-name">${DAY_NAMES_FULL[dayIdx]}</span>
+    <span class="dh-date">${date.getMonth()+1}月${date.getDate()}日</span>
+    ${isToday ? '<span class="dh-today-badge">TODAY</span>' : ''}
+    ${dayShiftCount > 0 ? `<span class="dh-shift-count">${dayShiftCount} シフト</span>` : ''}
+  `;
+  block.appendChild(header);
+
+  // ── Time row ──
+  const timeRow = document.createElement('div');
+  timeRow.className = 'time-row';
+  const trSpacer = document.createElement('div');
+  trSpacer.className = 'tr-spacer';
+  const trHours = document.createElement('div');
+  trHours.className = 'tr-hours';
+  for (let h = 0; h < 24; h++) {
+    const he = document.createElement('div');
+    he.className = 'tr-hour' + (h===0?' h0':'');
+    he.textContent = h === 0 ? '0:00' : h;
+    trHours.appendChild(he);
+  }
+  timeRow.appendChild(trSpacer);
+  timeRow.appendChild(trHours);
+  block.appendChild(timeRow);
+
+  // ── Grade groups ──
+  [4,3,2,1].forEach(grade => {
+    const gm = members.filter(m => m.grade === grade);
+    if (!gm.length) return;
+
+    const grp = document.createElement('div');
+    grp.className = `grade-group g${grade}`;
+
+    const gh = document.createElement('div');
+    gh.className = 'grade-header';
+    const gl = document.createElement('div');
+    gl.className = 'grade-label';
+    gl.textContent = GRADE_LABELS[grade];
+    const glr = document.createElement('div');
+    glr.className = 'grade-line-row';
+    const ln = document.createElement('div');
+    ln.className = 'grade-line';
+    glr.appendChild(ln);
+    gh.appendChild(gl); gh.appendChild(glr);
+    grp.appendChild(gh);
+
+    gm.forEach(member => {
+      const mShifts = shifts.filter(s => s.member_id === member.id && s.date === dateStr);
+      grp.appendChild(buildMemberRow(member, mShifts, date, isToday, isSat || isSun));
+    });
+
+    block.appendChild(grp);
   });
-  return el;
+
+  return block;
 }
 
-function buildGradeGroup(grade, gm, dates, todayStr) {
-  const grp = document.createElement('div');
-  grp.className = `grade-group g${grade}`;
-  const gh = document.createElement('div');
-  gh.className = 'grade-header';
-  const gl = document.createElement('div');
-  gl.className = 'grade-label';
-  gl.textContent = GRADE_LABELS[grade];
-  const glr = document.createElement('div');
-  glr.className = 'grade-line-row';
-  const ln = document.createElement('div');
-  ln.className = 'grade-line';
-  glr.appendChild(ln);
-  gh.appendChild(gl); gh.appendChild(glr);
-  grp.appendChild(gh);
-  gm.forEach(m => grp.appendChild(buildMemberRow(m, shifts.filter(s => s.member_id === m.id), dates, todayStr)));
-  return grp;
-}
-
-function buildMemberRow(member, mShifts, dates, todayStr) {
+function buildMemberRow(member, mShifts, date, isToday, isWeekend) {
   const row = document.createElement('div');
   row.className = 'member-row';
 
   const lbl = document.createElement('div');
   lbl.className = 'member-label';
+  const mc = member.color || GRADE_COLORS[member.grade];
   const av = document.createElement('div');
   av.className = 'avatar';
-  const mc = member.color || GRADE_COLORS[member.grade];
-  av.style.background = mc + '22';
-  av.style.color = mc;
-  av.style.border = `1.5px solid ${mc}44`;
+  av.style.cssText = `background:${mc}22;color:${mc};border:1.5px solid ${mc}55`;
   av.textContent = member.name.charAt(0);
   const nm = document.createElement('div');
   nm.className = 'member-name';
@@ -643,31 +737,31 @@ function buildMemberRow(member, mShifts, dates, todayStr) {
 
   const grid = document.createElement('div');
   grid.className = 'row-grid mode-' + inputMode;
-  dates.forEach((d, i) => {
-    const col = document.createElement('div');
-    col.className = 'day-col'+(fmtDate(d)===todayStr?' is-today':'')+(i>=5?' is-weekend':'');
-    for (let h=0;h<24;h++) { const c=document.createElement('div'); c.className='hour-cell'; col.appendChild(c); }
-    grid.appendChild(col);
-  });
 
+  // Hour cells (background)
+  for (let h = 0; h < 24; h++) {
+    const c = document.createElement('div');
+    c.className = 'hour-cell' + (isToday?' is-today-bg':'') + (isWeekend?' is-weekend-bg':'');
+    grid.appendChild(c);
+  }
+
+  // Shift bars
   mShifts.forEach(shift => {
-    const di = dayIndex(shift.date);
-    if (di >= 0 && di <= 6) grid.appendChild(buildShiftBar(shift, member, di));
+    grid.appendChild(buildShiftBar(shift, member));
   });
 
-  setupInteraction(grid, member, dates);
+  setupInteraction(grid, member, date);
   row.appendChild(grid);
   return row;
 }
 
-function buildShiftBar(shift, member, di) {
+function buildShiftBar(shift, member) {
   const isDesired = shift.type === 'desired';
   const bar = document.createElement('div');
   bar.className = 'shift-bar ' + (isDesired ? 'desired' : 'confirmed');
   if (!isDesired) bar.style.background = member.color || GRADE_COLORS[member.grade];
-  bar.style.left  = (di * DAY_W + (shift.start_minutes / 60) * HOUR_W) + 'px';
+  bar.style.left  = ((shift.start_minutes / 60) * HOUR_W) + 'px';
   bar.style.width = Math.max(((shift.end_minutes - shift.start_minutes) / 60) * HOUR_W, 6) + 'px';
-
   const t = document.createElement('span');
   t.className = 'shift-time';
   t.textContent = `${toTime(shift.start_minutes)}–${toTime(shift.end_minutes)}`;
@@ -682,91 +776,101 @@ function buildShiftBar(shift, member, di) {
   return bar;
 }
 
-// ── Interaction (確定=drag / 希望=click→modal) ──────────────────
-function setupInteraction(grid, member, dates) {
-  let preview = null, startInfo = null;
+// ── Interaction ────────────────────────────────────────────────
+function setupInteraction(grid, member, date) {
+  let preview = null, startMins = null;
 
-  function getInfo(cx) {
+  function getMinutes(cx) {
     const wr = document.getElementById('gantt-wrapper');
     const x  = cx - LABEL_W + wr.scrollLeft;
-    const di = Math.max(0, Math.min(6, Math.floor(x / DAY_W)));
-    const mins = snap(Math.max(0, Math.min(1440, ((x - di * DAY_W) / HOUR_W) * 60)));
-    return { di, mins };
+    return snap(Math.max(0, Math.min(1440, (x / HOUR_W) * 60)));
   }
 
-  // ── 確定：ドラッグ ──
-  function startDrag(cx) {
-    startInfo = getInfo(cx);
+  // 確定：ドラッグ
+  grid.addEventListener('mousedown', e => {
+    if (inputMode !== 'confirmed' || e.target.classList.contains('shift-bar') || e.button !== 0) return;
+    e.preventDefault();
+    startMins = getMinutes(e.clientX);
     preview = document.createElement('div');
     preview.className = 'drag-preview';
     preview.style.background = member.color || GRADE_COLORS[member.grade];
     grid.appendChild(preview);
-    refreshPrev(startInfo.mins, startInfo.mins);
-  }
-  function moveDrag(cx) {
-    if (!startInfo || !preview) return;
-    refreshPrev(startInfo.mins, getInfo(cx).mins);
-  }
-  async function endDrag(cx) {
-    if (!startInfo || !preview) { startInfo = null; return; }
-    const endMins = getInfo(cx).mins;
-    preview.remove(); preview = null;
-    const s = Math.min(startInfo.mins, endMins);
-    const e = Math.max(startInfo.mins, endMins);
-    const di = startInfo.di;
-    startInfo = null;
-    if (e - s >= 15) await createShift(member.id, dates[di], s, e, 'confirmed');
-  }
-  function refreshPrev(s0, e0) {
-    const s = Math.min(s0, e0), e = Math.max(s0, e0);
-    preview.style.left  = (startInfo.di * DAY_W + (s / 60) * HOUR_W) + 'px';
-    preview.style.width = Math.max(((e - s) / 60) * HOUR_W, 4) + 'px';
-    preview.textContent = `${toTime(s)}–${toTime(e)}`;
-  }
+    refreshPrev(startMins, startMins);
 
-  grid.addEventListener('mousedown', e => {
-    if (inputMode !== 'confirmed') return;
-    if (e.target.classList.contains('shift-bar') || e.button !== 0) return;
-    e.preventDefault();
-    startDrag(e.clientX);
-    const mm = e2 => moveDrag(e2.clientX);
-    const mu = e2 => {
-      endDrag(e2.clientX);
+    const mm = e2 => {
+      if (startMins === null) return;
+      refreshPrev(startMins, getMinutes(e2.clientX));
+    };
+    const mu = async e2 => {
       document.removeEventListener('mousemove', mm);
       document.removeEventListener('mouseup', mu);
+      if (startMins === null || !preview) return;
+      const endMins = getMinutes(e2.clientX);
+      preview.remove(); preview = null;
+      const s = Math.min(startMins, endMins);
+      const e = Math.max(startMins, endMins);
+      startMins = null;
+      if (e - s >= 15) await createShift(member.id, date, s, e, 'confirmed');
     };
     document.addEventListener('mousemove', mm);
     document.addEventListener('mouseup', mu);
   });
+
+  // タッチ対応（確定）
   grid.addEventListener('touchstart', e => {
     if (inputMode !== 'confirmed' || e.target.classList.contains('shift-bar')) return;
-    startDrag(e.touches[0].clientX);
+    startMins = getMinutes(e.touches[0].clientX);
+    preview = document.createElement('div');
+    preview.className = 'drag-preview';
+    preview.style.background = member.color || GRADE_COLORS[member.grade];
+    grid.appendChild(preview);
+    refreshPrev(startMins, startMins);
   }, { passive: true });
-  grid.addEventListener('touchmove',  e => { if (inputMode === 'confirmed') moveDrag(e.touches[0].clientX); }, { passive: true });
-  grid.addEventListener('touchend',   e => { if (inputMode === 'confirmed') endDrag(e.changedTouches[0].clientX); });
+  grid.addEventListener('touchmove', e => {
+    if (inputMode !== 'confirmed' || startMins === null) return;
+    refreshPrev(startMins, getMinutes(e.touches[0].clientX));
+  }, { passive: true });
+  grid.addEventListener('touchend', async e => {
+    if (inputMode !== 'confirmed' || startMins === null || !preview) return;
+    const endMins = getMinutes(e.changedTouches[0].clientX);
+    preview.remove(); preview = null;
+    const s = Math.min(startMins, endMins);
+    const ec = Math.max(startMins, endMins);
+    startMins = null;
+    if (ec - s >= 15) await createShift(member.id, date, s, ec, 'confirmed');
+  });
 
-  // ── 希望：クリック→モーダル ──
+  function refreshPrev(s0, e0) {
+    const s = Math.min(s0, e0), e = Math.max(s0, e0);
+    preview.style.left  = (s / 60 * HOUR_W) + 'px';
+    preview.style.width = Math.max((e - s) / 60 * HOUR_W, 4) + 'px';
+    preview.textContent = `${toTime(s)}–${toTime(e)}`;
+  }
+
+  // 希望：クリック→モーダル
   grid.addEventListener('click', e => {
-    if (inputMode !== 'desired') return;
-    if (e.target.classList.contains('shift-bar')) return;
-    const { di, mins } = getInfo(e.clientX);
-    openDesiredModal(member, dates[di], mins);
+    if (inputMode !== 'desired' || e.target.classList.contains('shift-bar')) return;
+    openDesiredModal(member, date, getMinutes(e.clientX));
   });
 }
 
-// ── Now Lines ──────────────────────────────────────────────────
+// ── Now Line ───────────────────────────────────────────────────
 function drawNowLines() {
   document.querySelectorAll('.now-line').forEach(el => el.remove());
   const todayStr = fmtDate(new Date());
-  const di = weekDates().findIndex(d => fmtDate(d) === todayStr);
-  if (di < 0) return;
   const now = new Date();
-  const x = di * DAY_W + ((now.getHours() * 60 + now.getMinutes()) / 60) * HOUR_W;
-  document.querySelectorAll('.row-grid').forEach(grid => {
-    const ln = document.createElement('div');
-    ln.className = 'now-line';
-    ln.style.left = x + 'px';
-    grid.appendChild(ln);
+  const x = ((now.getHours() * 60 + now.getMinutes()) / 60) * HOUR_W;
+  // Find the day block for today
+  document.querySelectorAll('.day-block').forEach(block => {
+    const header = block.querySelector('.day-block-header');
+    if (header && header.classList.contains('is-today')) {
+      block.querySelectorAll('.row-grid').forEach(grid => {
+        const ln = document.createElement('div');
+        ln.className = 'now-line';
+        ln.style.left = x + 'px';
+        grid.appendChild(ln);
+      });
+    }
   });
 }
 
@@ -786,13 +890,23 @@ function renderDayNav() {
 }
 
 function scrollToDay(i) {
-  document.getElementById('gantt-wrapper').scrollTo({ left: i * DAY_W, behavior: 'smooth' });
+  const blocks = document.querySelectorAll('.day-block');
+  if (blocks[i]) {
+    document.getElementById('gantt-wrapper').scrollTo({ top: blocks[i].offsetTop, behavior: 'smooth' });
+  }
 }
+
+function onScroll() { updateActiveDayTab(); }
+
 function updateActiveDayTab() {
-  const sl = document.getElementById('gantt-wrapper').scrollLeft;
-  const ai = Math.min(6, Math.floor((sl + DAY_W * 0.3) / DAY_W));
-  document.querySelectorAll('.dnav-btn').forEach((b, i) => b.classList.toggle('active', i === ai));
+  const wrapper  = document.getElementById('gantt-wrapper');
+  const scrollTop = wrapper.scrollTop + 60;
+  const blocks   = document.querySelectorAll('.day-block');
+  let activeDay  = 0;
+  blocks.forEach((b, i) => { if (b.offsetTop <= scrollTop) activeDay = i; });
+  document.querySelectorAll('.dnav-btn').forEach((b, i) => b.classList.toggle('active', i === activeDay));
 }
+
 function updateWeekRange() {
   const d = weekDates();
   document.getElementById('week-range').textContent =
@@ -804,7 +918,7 @@ function prevWeek()   { weekStart = new Date(weekStart); weekStart.setDate(weekS
 function nextWeek()   { weekStart = new Date(weekStart); weekStart.setDate(weekStart.getDate()+7); loadData(); }
 function goThisWeek() {
   weekStart = getWeekStart(new Date()); loadData();
-  setTimeout(() => { const now = new Date(); scrollToDay(now.getDay()===0?6:now.getDay()-1); }, 350);
+  setTimeout(() => { const now = new Date(); scrollToDay(now.getDay()===0?6:now.getDay()-1); }, 400);
 }
 
 // ── Mode ───────────────────────────────────────────────────────
@@ -812,51 +926,42 @@ function setMode(m) {
   inputMode = m;
   document.getElementById('btn-confirmed').className = 'mode-btn'+(m==='confirmed'?' active m-confirmed':' m-confirmed');
   document.getElementById('btn-desired').className   = 'mode-btn'+(m==='desired'  ?' active m-desired'  :' m-desired');
-  // グリッドのカーソルを更新
-  document.querySelectorAll('.row-grid').forEach(g => {
-    g.className = 'row-grid mode-' + m;
-  });
+  document.querySelectorAll('.row-grid').forEach(g => { g.className = 'row-grid mode-' + m; });
 }
 
 // ── 希望シフトモーダル ──────────────────────────────────────────
 function openDesiredModal(member, date, suggestedMins) {
   desiredCtx = { member, date };
   document.getElementById('dm-member').textContent = member.name;
-  const di = dayIndex(fmtDate(date));
+  const di = weekDates().findIndex(d => fmtDate(d) === fmtDate(date));
   document.getElementById('dm-date').textContent =
-    `${DAY_NAMES[di]}曜日  ${date.getMonth()+1}月${date.getDate()}日`;
-  const s = snap(suggestedMins);
-  const e = snap(Math.min(s + 120, 1440));
+    `${DAY_NAMES_FULL[di]}  ${date.getMonth()+1}月${date.getDate()}日`;
+  const s = snap(suggestedMins), e = snap(Math.min(s + 120, 1440));
   document.getElementById('dm-start').value = toTimeInput(s);
   document.getElementById('dm-end').value   = toTimeInput(e);
   document.getElementById('dm-note').value  = '';
   document.getElementById('desired-modal').classList.remove('hidden');
-  setTimeout(() => document.getElementById('dm-start').focus(), 100);
+  setTimeout(() => document.getElementById('dm-start').focus(), 80);
 }
-function closeDesiredModal() {
-  document.getElementById('desired-modal').classList.add('hidden');
-  desiredCtx = null;
-}
+function closeDesiredModal() { document.getElementById('desired-modal').classList.add('hidden'); desiredCtx = null; }
 async function saveDesiredShift() {
   if (!desiredCtx) return;
   const sv = document.getElementById('dm-start').value;
   const ev = document.getElementById('dm-end').value;
   const note = document.getElementById('dm-note').value.trim();
   if (!sv || !ev) { showToast('時間を入力してください'); return; }
-  const startMins = timeToMins(sv);
-  const endMins   = timeToMins(ev);
-  if (endMins <= startMins) { showToast('終了時間は開始時間より後にしてください'); return; }
-  await createShift(desiredCtx.member.id, desiredCtx.date, startMins, endMins, 'desired', note);
+  const sMin = timeToMins(sv), eMin = timeToMins(ev);
+  if (eMin <= sMin) { showToast('終了時間は開始時間より後にしてください'); return; }
+  await createShift(desiredCtx.member.id, desiredCtx.date, sMin, eMin, 'desired', note);
   closeDesiredModal();
 }
 
 // ── CRUD ───────────────────────────────────────────────────────
-async function createShift(memberId, date, startMin, endMin, type = inputMode, note = '') {
+async function createShift(memberId, date, startMin, endMin, type = 'confirmed', note = '') {
   try {
     const { error } = await sb.from('shifts').insert({
       member_id: memberId, date: fmtDate(date),
-      start_minutes: startMin, end_minutes: endMin,
-      note, type
+      start_minutes: startMin, end_minutes: endMin, note, type
     });
     if (error) throw error;
     showToast(type==='desired' ? '◎ 希望シフトを追加しました' : '✓ 確定シフトを追加しました');
@@ -907,24 +1012,21 @@ async function deleteMember() {
 // ── Shift Popup ────────────────────────────────────────────────
 function showShiftPopup(shift, member, e) {
   activeShiftId = shift.id;
-  const di = dayIndex(shift.date);
-  const d  = weekDates()[di];
-  document.getElementById('popup-name').textContent =
-    member.name + (shift.type==='desired' ? '  ◎ 希望' : '  ✓ 確定');
+  const d = new Date(shift.date + 'T00:00:00');
+  const di = weekDates().findIndex(wd => fmtDate(wd) === shift.date);
+  document.getElementById('popup-name').textContent = member.name + (shift.type==='desired' ? '  ◎ 希望' : '  ✓ 確定');
   document.getElementById('popup-meta').textContent =
-    (d ? DAY_NAMES[di]+' '+(d.getMonth()+1)+'/'+d.getDate() : '') +
-    '  ' + toTime(shift.start_minutes) + '〜' + toTime(shift.end_minutes);
+    `${DAY_NAMES[di>=0?di:0]}曜  ${d.getMonth()+1}/${d.getDate()}  ${toTime(shift.start_minutes)}〜${toTime(shift.end_minutes)}`;
   document.getElementById('popup-note').value = shift.note || '';
   const p = document.getElementById('shift-popup');
   p.classList.add('visible');
   let x = e.clientX+12, y = e.clientY+12;
-  if (x+240 > window.innerWidth)  x = e.clientX-252;
-  if (y+200 > window.innerHeight) y = e.clientY-212;
+  if (x+240>window.innerWidth)  x = e.clientX-252;
+  if (y+200>window.innerHeight) y = e.clientY-212;
   p.style.left = x+'px'; p.style.top = y+'px';
 }
 function closePopup() { document.getElementById('shift-popup').classList.remove('visible'); activeShiftId = null; }
 
-// ── Member Modal ───────────────────────────────────────────────
 function openAddMember() {
   editingMemberId = null;
   document.getElementById('member-modal-title').textContent = 'メンバーを追加';
@@ -953,13 +1055,13 @@ function renderMemberPanel() {
     const gm = members.filter(m => m.grade === g);
     if (!gm.length) return;
     const gh = document.createElement('div');
-    gh.style.cssText = `font-size:.7rem;color:${GRADE_COLORS[g]};font-weight:700;padding:6px 3px 3px;letter-spacing:.09em;text-transform:uppercase`;
+    gh.style.cssText = `font-size:.7rem;color:${GRADE_COLORS[g]};font-weight:700;padding:6px 3px 3px;letter-spacing:.08em;text-transform:uppercase`;
     gh.textContent = GRADE_LABELS[g];
     list.appendChild(gh);
     gm.forEach(m => {
+      const mc = m.color || GRADE_COLORS[m.grade];
       const card = document.createElement('div');
       card.className = 'mc';
-      const mc = m.color || GRADE_COLORS[m.grade];
       card.innerHTML = `<div style="width:28px;height:28px;border-radius:50%;background:${mc}22;border:1.5px solid ${mc}55;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;color:${mc};flex-shrink:0">${m.name.charAt(0)}</div><div class="mc-info"><div class="mc-name">${m.name}</div><div class="mc-grade">${GRADE_LABELS[m.grade]}</div></div><div class="small-btn" onclick='openEditMember(${JSON.stringify(m)})'>✎</div>`;
       list.appendChild(card);
     });
@@ -981,11 +1083,6 @@ function getWeekStart(d) {
 }
 function weekDates() {
   return Array.from({length:7},(_,i)=>{ const d=new Date(weekStart); d.setDate(d.getDate()+i); return d; });
-}
-function dayIndex(dateStr) {
-  const d = new Date(dateStr); d.setHours(0,0,0,0);
-  const ws = new Date(weekStart); ws.setHours(0,0,0,0);
-  return Math.round((d-ws)/86400000);
 }
 function fmtDate(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function toTime(m)      { return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; }
