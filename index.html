@@ -49,7 +49,13 @@ body {
   cursor: pointer; font-size: .82rem; font-weight: 500; white-space: nowrap;
 }
 .tb-btn:hover { background: var(--surface2); }
-#week-range { font-size: .88rem; font-weight: 700; min-width: 160px; text-align: center; }
+#week-select {
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); padding: 5px 10px; border-radius: 7px;
+  font-size: .85rem; font-weight: 700; cursor: pointer; outline: none;
+  height: 34px;
+}
+#week-select:focus { border-color: var(--accent); }
 .this-week-btn {
   background: var(--accent-soft); border: 1px solid rgba(124,58,237,.3);
   color: var(--accent); padding: 5px 12px; border-radius: 7px;
@@ -371,10 +377,7 @@ body {
   <h1>📅 シフトスケジューラー</h1>
   <div id="sync-dot" class="connecting"></div>
   <div class="spacer"></div>
-  <button class="tb-btn" onclick="prevWeek()">‹ 先週</button>
-  <span id="week-range"></span>
-  <button class="tb-btn" onclick="nextWeek()">翌週 ›</button>
-  <button class="this-week-btn" onclick="goThisWeek()">今週</button>
+  <select id="week-select" onchange="onWeekSelect(this.value)"></select>
   <div style="width:1px;height:24px;background:var(--border);margin:0 2px"></div>
   <div class="mode-toggle">
     <button class="mode-btn active m-confirmed" id="btn-confirmed" onclick="setMode('confirmed')">✓ 確定</button>
@@ -476,8 +479,8 @@ setInterval(drawNowLines, 60000);
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closePopup(); closeMemberModal(); closeWeeklyDesiredModal(); }
   if (!e.target.matches('input,select,textarea')) {
-    if (e.key === 'ArrowLeft')  prevWeek();
-    if (e.key === 'ArrowRight') nextWeek();
+    if (e.key === 'ArrowLeft')  { prevWeek(); }
+    if (e.key === 'ArrowRight') { nextWeek(); }
   }
 });
 document.getElementById('gantt-outer').addEventListener('scroll', onGanttScroll, { passive: true });
@@ -534,8 +537,7 @@ function renderGantt() {
   const todayStr = fmtDate(new Date());
 
   // ── Week-range label ──
-  document.getElementById('week-range').textContent =
-    `${dates[0].getMonth()+1}/${dates[0].getDate()}(月) 〜 ${dates[6].getMonth()+1}/${dates[6].getDate()}(日)`;
+  buildWeekDropdown();
 
   // ── Corner ──
   gantt.appendChild(el('div','gh-corner'));
@@ -753,7 +755,7 @@ function openWeeklyDesiredModal(member) {
 
     // Start input
     const si = document.createElement('input');
-    si.type='time'; si.step='900';
+    si.type='time'; si.step='600';
     si.className='wd-time-input';
     si.dataset.day=i; si.dataset.type='start';
     si.placeholder='開始';
@@ -765,7 +767,7 @@ function openWeeklyDesiredModal(member) {
 
     // End input
     const ei = document.createElement('input');
-    ei.type='time'; ei.step='900';
+    ei.type='time'; ei.step='600';
     ei.className='wd-time-input';
     ei.dataset.day=i; ei.dataset.type='end';
     ei.placeholder='終了';
@@ -868,6 +870,32 @@ function onGanttScroll() {
 function prevWeek()   { weekStart = new Date(weekStart); weekStart.setDate(weekStart.getDate()-7); loadData(); }
 function nextWeek()   { weekStart = new Date(weekStart); weekStart.setDate(weekStart.getDate()+7); loadData(); }
 function goThisWeek() { weekStart = getWeekStart(new Date()); loadData(); }
+
+function buildWeekDropdown() {
+  const sel = document.getElementById('week-select');
+  const currentVal = fmtDate(weekStart);
+  sel.innerHTML = '';
+  // 過去8週 ～ 未来8週
+  const base = getWeekStart(new Date());
+  for (let offset = -8; offset <= 8; offset++) {
+    const ws = new Date(base);
+    ws.setDate(ws.getDate() + offset * 7);
+    const we = new Date(ws); we.setDate(we.getDate() + 6);
+    const val = fmtDate(ws);
+    const isThis = offset === 0;
+    const label = `${ws.getMonth()+1}/${ws.getDate()}(月) 〜 ${we.getMonth()+1}/${we.getDate()}(日)` + (isThis ? ' ← 今週' : '');
+    const opt = document.createElement('option');
+    opt.value = val; opt.textContent = label;
+    if (val === currentVal) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+function onWeekSelect(val) {
+  const [y,m,d] = val.split('-').map(Number);
+  weekStart = new Date(y, m-1, d);
+  loadData();
+}
 
 // ── Mode ─────────────────────────────────────────────────────────
 function setMode(m) {
