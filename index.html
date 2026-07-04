@@ -7,37 +7,38 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
-  --bg: #0d1117;
-  --surface: #161b22;
-  --surface2: #21262d;
-  --border: #30363d;
-  --border2: #1c2128;
-  --text: #e6edf3;
-  --text-muted: #7d8590;
-  --text-dim: #3d444d;
-  --accent: #7c3aed;
-  --accent-soft: rgba(124,58,237,.12);
-  --danger: #f85149;
-  --success: #3fb950;
-  --warning: #d29922;
-  --today-bg: rgba(124,58,237,.06);
-  --weekend-bg: rgba(255,255,255,.012);
+  --bg:          #f6f8fa;
+  --surface:     #ffffff;
+  --surface2:    #f6f8fa;
+  --border:      #d0d7de;
+  --border2:     #e8ecef;
+  --text:        #1f2328;
+  --text-muted:  #656d76;
+  --text-dim:    #c8cdd2;
+  --accent:      #7c3aed;
+  --accent-soft: rgba(124,58,237,.08);
+  --danger:      #cf222e;
+  --success:     #1a7f37;
+  --warning:     #9a6700;
+  --today-bg:    rgba(124,58,237,.05);
+  --weekend-bg:  rgba(0,0,0,.018);
+  --desired-bg:  #94a3b8;
 
-  --label-w: 144px;
-  --hour-w: 64px;
-  --day-w: calc(var(--hour-w) * 24);
-  --row-h: 46px;
-  --topbar-h: 54px;
+  --label-w:     148px;
+  --hour-w:      64px;
+  --day-w:       calc(var(--hour-w) * 24);
+  --row-h:       46px;
+  --topbar-h:    54px;
   --day-label-h: 30px;
-  --hour-label-h: 26px;
-  --time-h: calc(var(--day-label-h) + var(--hour-label-h));
-  --grade-h: 28px;
-  --daynav-h: 52px;
+  --hour-label-h:26px;
+  --time-h:      calc(var(--day-label-h) + var(--hour-label-h));
+  --grade-h:     28px;
+  --daynav-h:    52px;
 
-  --g4: #a78bfa;
-  --g3: #34d399;
-  --g2: #60a5fa;
-  --g1: #fb923c;
+  --g4: #7c3aed;
+  --g3: #059669;
+  --g2: #2563eb;
+  --g1: #ea580c;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -55,51 +56,48 @@ body {
   height: var(--topbar-h);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px;
-  flex-shrink: 0;
-  z-index: 200;
+  display: flex; align-items: center; gap: 8px; padding: 0 14px;
+  flex-shrink: 0; z-index: 200;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
 }
-#topbar h1 { font-size: .95rem; font-weight: 700; white-space: nowrap; letter-spacing: -.01em; }
+#topbar h1 { font-size: .95rem; font-weight: 700; white-space: nowrap; color: var(--text); }
 .tb-btn {
-  background: var(--surface2); border: 1px solid var(--border);
-  color: var(--text); padding: 5px 11px; border-radius: 7px;
-  cursor: pointer; font-size: .82rem; white-space: nowrap; font-weight: 500;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); padding: 5px 12px; border-radius: 7px;
+  cursor: pointer; font-size: .82rem; font-weight: 500; white-space: nowrap;
 }
-.tb-btn:hover { background: var(--border); }
-#week-range { font-size: .88rem; font-weight: 600; min-width: 160px; text-align: center; }
+.tb-btn:hover { background: var(--surface2); }
+#week-range { font-size: .88rem; font-weight: 700; min-width: 160px; text-align: center; color: var(--text); }
 .this-week-btn {
-  background: var(--accent-soft); border: 1px solid rgba(124,58,237,.4);
-  color: #a78bfa; padding: 5px 11px; border-radius: 7px;
-  cursor: pointer; font-size: .8rem; font-weight: 600; white-space: nowrap;
+  background: var(--accent-soft); border: 1px solid rgba(124,58,237,.3);
+  color: var(--accent); padding: 5px 12px; border-radius: 7px;
+  cursor: pointer; font-size: .8rem; font-weight: 700; white-space: nowrap;
 }
-.this-week-btn:hover { background: rgba(124,58,237,.22); }
+.this-week-btn:hover { background: rgba(124,58,237,.15); }
 .spacer { flex: 1; }
 .mode-toggle {
   display: flex; background: var(--surface2); border: 1px solid var(--border);
   border-radius: 8px; padding: 2px; gap: 2px;
 }
 .mode-btn {
-  padding: 4px 11px; border-radius: 6px; border: none; cursor: pointer;
+  padding: 4px 12px; border-radius: 6px; border: none; cursor: pointer;
   font-size: .8rem; font-weight: 700; background: transparent;
   color: var(--text-muted); transition: all .15s; white-space: nowrap;
 }
-.mode-btn.active.m-confirmed { background: #1f6feb; color: #fff; }
-.mode-btn.active.m-desired   { background: #9e6a03; color: #fff; }
+.mode-btn.active.m-confirmed { background: #2563eb; color: #fff; }
+.mode-btn.active.m-desired   { background: #64748b; color: #fff; }
 .icon-btn {
-  background: var(--surface2); border: 1px solid var(--border);
+  background: var(--surface); border: 1px solid var(--border);
   color: var(--text); width: 34px; height: 34px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; font-size: 1rem; flex-shrink: 0;
 }
-.icon-btn:hover { background: var(--border); }
+.icon-btn:hover { background: var(--surface2); }
 #sync-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.ok          { background: var(--success); }
-.error       { background: var(--danger); }
-.connecting  { background: var(--warning); animation: blink .9s infinite; }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.15} }
+.ok         { background: var(--success); }
+.error      { background: var(--danger); }
+.connecting { background: var(--warning); animation: blink .9s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
 
 /* ── GANTT WRAPPER ── */
 #gantt-wrapper { flex: 1; overflow: auto; padding-bottom: var(--daynav-h); }
@@ -115,12 +113,14 @@ body {
 #time-header {
   position: sticky; top: 0; z-index: 50;
   display: flex; height: var(--time-h);
-  background: var(--bg); border-bottom: 2px solid var(--border);
+  background: var(--surface);
+  border-bottom: 2px solid var(--border);
+  box-shadow: 0 2px 4px rgba(0,0,0,.05);
 }
 .th-spacer {
   width: var(--label-w); flex-shrink: 0;
   position: sticky; left: 0; z-index: 60;
-  background: var(--bg); border-right: 2px solid var(--border);
+  background: var(--surface); border-right: 2px solid var(--border);
   display: flex; align-items: center; justify-content: center;
   flex-direction: column; gap: 2px;
 }
@@ -128,24 +128,25 @@ body {
 .th-day {
   width: var(--day-w); flex-shrink: 0;
   display: flex; flex-direction: column;
-  border-right: 2px solid var(--border);
+  border-right: 1px solid var(--border);
 }
 .th-day.is-today .th-day-label { background: var(--accent-soft); }
+.th-day.is-sat .th-day-label { background: rgba(37,99,235,.04); }
+.th-day.is-sun .th-day-label { background: rgba(207,34,46,.04); }
 .th-day-label {
   height: var(--day-label-h); display: flex; align-items: center;
   padding: 0 10px; gap: 6px; border-bottom: 1px solid var(--border2);
+  background: var(--surface);
 }
-.th-day-name { font-size: .85rem; font-weight: 700; }
+.th-day-name { font-size: .85rem; font-weight: 700; color: var(--text); }
 .th-day-date { font-size: .75rem; color: var(--text-muted); }
 .th-today-badge {
   margin-left: auto; font-size: .67rem; font-weight: 700;
-  background: var(--accent); color: #fff;
-  border-radius: 4px; padding: 1px 5px;
+  background: var(--accent); color: #fff; border-radius: 4px; padding: 1px 5px;
 }
-.th-day.is-weekend .th-day-name { color: #60a5fa; }
-.th-day.is-weekend .th-day-date { color: #60a5fa; opacity: .7; }
-.th-day.is-sunday  .th-day-name { color: #f85149; }
-.th-hours { flex: 1; display: flex; }
+.th-day.is-sat .th-day-name { color: #2563eb; }
+.th-day.is-sun .th-day-name { color: #cf222e; }
+.th-hours { flex: 1; display: flex; background: var(--surface); }
 .th-hour {
   width: var(--hour-w); flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
@@ -159,30 +160,30 @@ body {
 .grade-header {
   position: sticky; top: var(--time-h); z-index: 40;
   display: flex; height: var(--grade-h);
-  background: var(--surface);
-  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  border-top: 2px solid var(--border); border-bottom: 1px solid var(--border);
 }
 .grade-label {
   width: var(--label-w); flex-shrink: 0;
   position: sticky; left: 0; z-index: 45;
-  background: var(--surface); border-right: 2px solid var(--border);
+  background: var(--surface2); border-right: 2px solid var(--border);
   display: flex; align-items: center; padding-left: 14px;
-  font-size: .73rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+  font-size: .73rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
 }
 .grade-line-row { flex: 1; display: flex; align-items: center; }
-.grade-line { height: 2px; width: 100%; opacity: .2; margin: 0 10px; border-radius: 2px; }
+.grade-line { height: 2px; width: 100%; opacity: .25; margin: 0 12px; border-radius: 2px; }
 .g4 .grade-label { color: var(--g4); } .g4 .grade-line { background: var(--g4); }
 .g3 .grade-label { color: var(--g3); } .g3 .grade-line { background: var(--g3); }
 .g2 .grade-label { color: var(--g2); } .g2 .grade-line { background: var(--g2); }
 .g1 .grade-label { color: var(--g1); } .g1 .grade-line { background: var(--g1); }
 
 /* ── MEMBER ROW ── */
-.member-row { display: flex; height: var(--row-h); border-bottom: 1px solid var(--border2); }
+.member-row { display: flex; height: var(--row-h); border-bottom: 1px solid var(--border2); background: var(--surface); }
 .member-row:last-child { border-bottom: 1px solid var(--border); }
 .member-label {
   width: var(--label-w); flex-shrink: 0;
   position: sticky; left: 0; z-index: 20;
-  background: var(--bg); border-right: 2px solid var(--border);
+  background: var(--surface); border-right: 2px solid var(--border);
   display: flex; align-items: center; gap: 8px; padding: 0 10px;
   cursor: pointer; transition: background .12s; user-select: none;
 }
@@ -190,49 +191,55 @@ body {
 .avatar {
   width: 26px; height: 26px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: .72rem; font-weight: 700; flex-shrink: 0; color: #0d1117;
+  font-size: .72rem; font-weight: 700; flex-shrink: 0;
 }
-.member-name { font-size: .82rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-name { font-size: .83rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 
 /* ── ROW GRID ── */
-.row-grid { flex: 1; position: relative; display: flex; cursor: crosshair; overflow: hidden; }
-.day-col { width: var(--day-w); flex-shrink: 0; height: 100%; display: flex; border-right: 2px solid var(--border); }
+.row-grid { flex: 1; position: relative; display: flex; overflow: hidden; }
+.row-grid.mode-confirmed { cursor: crosshair; }
+.row-grid.mode-desired   { cursor: pointer; }
+.day-col { width: var(--day-w); flex-shrink: 0; height: 100%; display: flex; border-right: 1px solid var(--border); }
 .day-col.is-today   { background: var(--today-bg); }
 .day-col.is-weekend { background: var(--weekend-bg); }
-.hour-cell { width: var(--hour-w); flex-shrink: 0; border-right: 1px solid var(--border2); }
+.hour-cell { width: var(--hour-w); flex-shrink: 0; border-right: 1px solid var(--border2); height: 100%; }
 
 /* ── SHIFT BAR ── */
 .shift-bar {
   position: absolute; top: 5px; height: calc(100% - 10px);
   border-radius: 6px; display: flex; align-items: center;
-  padding: 0 7px; font-size: .71rem; font-weight: 600;
+  padding: 0 8px; font-size: .72rem; font-weight: 600;
   overflow: hidden; white-space: nowrap; cursor: pointer;
-  z-index: 5; color: #0d1117;
-  box-shadow: 0 1px 5px rgba(0,0,0,.4);
+  z-index: 5; box-shadow: 0 1px 4px rgba(0,0,0,.15);
   transition: opacity .12s, transform .1s;
 }
-.shift-bar:hover { opacity: .8; transform: scaleY(1.06); }
-.shift-bar.desired { opacity: .72; border: 2px dashed rgba(255,255,255,.5); }
-.shift-bar.desired::after {
-  content: ''; position: absolute; inset: 0; border-radius: 4px;
-  background: repeating-linear-gradient(-45deg,transparent 0,transparent 5px,rgba(0,0,0,.2) 5px,rgba(0,0,0,.2) 7px);
-  pointer-events: none;
+.shift-bar:hover { opacity: .82; transform: scaleY(1.06); }
+.shift-bar.confirmed { color: #fff; }
+.shift-bar.desired   {
+  background: var(--desired-bg) !important;
+  color: #fff; opacity: .85;
+  border: 1.5px solid rgba(100,116,139,.4);
 }
-.shift-time { font-size: .68rem; opacity: .8; }
+.shift-time { font-size: .68rem; opacity: .9; }
 
-/* ── DRAG PREVIEW ── */
+/* ── DRAG PREVIEW (確定のみ) ── */
 .drag-preview {
   position: absolute; top: 5px; height: calc(100% - 10px);
   border-radius: 6px; pointer-events: none; z-index: 20;
-  opacity: .6; border: 2px dashed rgba(255,255,255,.6);
-  display: flex; align-items: center; padding: 0 7px;
-  font-size: .71rem; font-weight: 600; color: #0d1117;
+  opacity: .55; border: 2px dashed rgba(255,255,255,.7);
+  display: flex; align-items: center; padding: 0 8px;
+  font-size: .72rem; font-weight: 600; color: #fff;
 }
+
+/* ── DESIRED HINT (クリックできることを示す) ── */
+.day-col:hover .desired-hint { opacity: 1; }
+.desired-hint { display: none; }
 
 /* ── NOW LINE ── */
 .now-line {
   position: absolute; top: 0; bottom: 0; width: 2px;
   background: var(--danger); z-index: 10; pointer-events: none;
+  box-shadow: 0 0 4px rgba(207,34,46,.4);
 }
 .now-line::before {
   content: ''; position: absolute; top: -1px; left: -4px;
@@ -244,25 +251,26 @@ body {
   position: fixed; bottom: 0; left: 0; right: 0;
   height: var(--daynav-h); background: var(--surface);
   border-top: 1px solid var(--border); display: flex; z-index: 150;
+  box-shadow: 0 -1px 4px rgba(0,0,0,.06);
 }
 .dnav-btn {
   flex: 1; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 1px;
   cursor: pointer; border: none; border-right: 1px solid var(--border2);
   background: transparent; color: var(--text-muted);
-  transition: background .12s, color .12s; padding: 5px 2px;
+  transition: background .12s; padding: 5px 2px;
 }
 .dnav-btn:last-child { border-right: none; }
 .dnav-btn:hover  { background: var(--surface2); }
-.dnav-btn.active { background: var(--accent-soft); color: #a78bfa; }
+.dnav-btn.active { background: var(--accent-soft); color: var(--accent); }
 .dnav-btn.is-today .dnav-dot { background: var(--accent); }
 .dnav-name { font-size: .82rem; font-weight: 700; }
 .dnav-date { font-size: .7rem; }
 .dnav-dot  { width: 4px; height: 4px; border-radius: 50%; }
-.dnav-btn.is-weekend .dnav-name { color: #60a5fa; }
-.dnav-btn.is-sunday  .dnav-name { color: #f85149; }
+.dnav-btn.is-sat .dnav-name  { color: #2563eb; }
+.dnav-btn.is-sun .dnav-name  { color: #cf222e; }
 .dnav-btn.active .dnav-name,
-.dnav-btn.active .dnav-date { color: #a78bfa; }
+.dnav-btn.active .dnav-date  { color: var(--accent); }
 
 /* ── MEMBER PANEL ── */
 #member-panel {
@@ -270,17 +278,19 @@ body {
   width: 256px; background: var(--surface); border-left: 1px solid var(--border);
   display: flex; flex-direction: column; z-index: 100;
   transform: translateX(100%); transition: transform .22s ease;
+  box-shadow: -2px 0 8px rgba(0,0,0,.06);
 }
 #member-panel.open { transform: translateX(0); }
 .mp-header {
-  padding: 13px 13px 11px; font-size: .92rem; font-weight: 700;
+  padding: 13px 14px 11px; font-size: .92rem; font-weight: 700;
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface);
 }
 #member-list { flex: 1; overflow-y: auto; padding: 9px; display: flex; flex-direction: column; gap: 5px; }
-.mc { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 9px 10px; display: flex; align-items: center; gap: 8px; }
+.mc { background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 9px 10px; display: flex; align-items: center; gap: 8px; }
 .mc-info { flex: 1; min-width: 0; }
-.mc-name  { font-size: .85rem; font-weight: 500; }
+.mc-name  { font-size: .85rem; font-weight: 500; color: var(--text); }
 .mc-grade { font-size: .73rem; color: var(--text-muted); }
 .small-btn {
   width: 26px; height: 26px; border-radius: 6px;
@@ -291,45 +301,79 @@ body {
 .small-btn:hover { background: var(--border); }
 #add-member-btn {
   margin: 9px; padding: 9px;
-  background: var(--accent-soft); border: 1px dashed rgba(124,58,237,.5);
-  border-radius: 9px; color: #a78bfa; cursor: pointer;
+  background: var(--accent-soft); border: 1px dashed rgba(124,58,237,.4);
+  border-radius: 9px; color: var(--accent); cursor: pointer;
   text-align: center; font-size: .86rem; font-weight: 600; flex-shrink: 0;
 }
-#add-member-btn:hover { background: rgba(124,58,237,.2); }
+#add-member-btn:hover { background: rgba(124,58,237,.14); }
 
 /* ── MODALS ── */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75); display: flex; align-items: center; justify-content: center; z-index: 300; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 300; }
 .modal-overlay.hidden { display: none; }
-.modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px; width: min(380px, 94vw); box-shadow: 0 20px 60px rgba(0,0,0,.6); }
-.modal-box h3 { font-size: .98rem; margin-bottom: 16px; }
-.form-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 11px; }
-.form-row label { font-size: .78rem; color: var(--text-muted); }
-.form-row input, .form-row select { background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; color: var(--text); font-size: .87rem; outline: none; width: 100%; }
-.form-row input:focus, .form-row select:focus { border-color: var(--accent); }
+.modal-box {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px; width: min(380px, 94vw);
+  box-shadow: 0 20px 50px rgba(0,0,0,.15);
+}
+.modal-box h3 { font-size: .98rem; margin-bottom: 16px; color: var(--text); }
+.form-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.form-row label { font-size: .78rem; color: var(--text-muted); font-weight: 500; }
+.form-row input, .form-row select {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 7px; padding: 8px 10px; color: var(--text);
+  font-size: .87rem; outline: none; width: 100%;
+}
+.form-row input:focus, .form-row select:focus { border-color: var(--accent); background: var(--surface); }
 .form-row input[type=color] { padding: 3px; height: 38px; cursor: pointer; }
+.form-row input[type=time]  { font-size: .95rem; font-weight: 500; }
 .modal-actions { display: flex; gap: 7px; margin-top: 16px; flex-wrap: wrap; }
-.btn { padding: 8px 15px; border-radius: 7px; border: none; cursor: pointer; font-size: .85rem; font-weight: 600; }
+.btn { padding: 8px 16px; border-radius: 7px; border: none; cursor: pointer; font-size: .85rem; font-weight: 600; }
 .btn-primary { background: var(--accent); color: #fff; }
 .btn-primary:hover { opacity: .9; }
+.btn-blue { background: #2563eb; color: #fff; }
+.btn-blue:hover { opacity: .9; }
+.btn-gray { background: #64748b; color: #fff; }
+.btn-gray:hover { opacity: .9; }
 .btn-danger { background: var(--danger); color: #fff; }
 .btn-danger:hover { opacity: .9; }
 .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-.btn-ghost:hover { background: var(--border); }
+.btn-ghost:hover { background: var(--border2); }
+
+/* ── 希望シフト入力モーダル ── */
+.dm-info {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; margin-bottom: 16px;
+  font-size: .85rem; color: var(--text-muted);
+}
+.dm-info strong { color: var(--text); font-size: .92rem; display: block; margin-bottom: 2px; }
+.time-row { display: flex; gap: 10px; align-items: flex-end; }
+.time-row .form-row { flex: 1; margin-bottom: 0; }
+.time-sep { font-size: 1rem; color: var(--text-muted); padding-bottom: 8px; }
 
 /* ── SHIFT POPUP ── */
-#shift-popup { position: fixed; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; min-width: 220px; z-index: 250; box-shadow: 0 12px 40px rgba(0,0,0,.55); display: none; }
+#shift-popup {
+  position: fixed; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px; min-width: 224px; z-index: 250;
+  box-shadow: 0 8px 30px rgba(0,0,0,.12); display: none;
+}
 #shift-popup.visible { display: block; }
-#shift-popup h4 { font-size: .9rem; margin-bottom: 3px; }
+#shift-popup h4 { font-size: .9rem; margin-bottom: 3px; color: var(--text); }
 .popup-meta { font-size: .78rem; color: var(--text-muted); margin-bottom: 10px; }
 .popup-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 11px; }
 
 /* ── TOAST ── */
-#toast { position: fixed; bottom: calc(var(--daynav-h) + 12px); left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--border); border-radius: 9px; padding: 8px 18px; font-size: .87rem; box-shadow: 0 8px 32px rgba(0,0,0,.45); z-index: 400; opacity: 0; transition: opacity .25s; pointer-events: none; white-space: nowrap; }
+#toast {
+  position: fixed; bottom: calc(var(--daynav-h) + 14px); left: 50%; transform: translateX(-50%);
+  background: var(--text); color: var(--surface); border-radius: 9px; padding: 8px 18px;
+  font-size: .87rem; box-shadow: 0 4px 20px rgba(0,0,0,.2); z-index: 400;
+  opacity: 0; transition: opacity .25s; pointer-events: none; white-space: nowrap;
+}
 #toast.show { opacity: 1; }
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 </style>
 </head>
 <body>
@@ -345,7 +389,7 @@ body {
   <div style="width:1px;height:24px;background:var(--border);margin:0 2px"></div>
   <div class="mode-toggle">
     <button class="mode-btn active m-confirmed" id="btn-confirmed" onclick="setMode('confirmed')">✓ 確定</button>
-    <button class="mode-btn m-desired" id="btn-desired" onclick="setMode('desired')">◎ 希望</button>
+    <button class="mode-btn m-desired"           id="btn-desired"   onclick="setMode('desired')">◎ 希望</button>
   </div>
   <button class="icon-btn" onclick="toggleMemberPanel()" title="メンバー管理">👥</button>
 </div>
@@ -356,6 +400,7 @@ body {
 
 <div id="day-nav"></div>
 
+<!-- メンバーパネル -->
 <div id="member-panel">
   <div class="mp-header">
     メンバー管理
@@ -365,6 +410,7 @@ body {
   <div id="add-member-btn" onclick="openAddMember()">＋ メンバーを追加</div>
 </div>
 
+<!-- メンバー編集モーダル -->
 <div class="modal-overlay hidden" id="member-modal">
   <div class="modal-box">
     <h3 id="member-modal-title">メンバーを追加</h3>
@@ -378,7 +424,7 @@ body {
         <option value="1" selected>1年生</option>
       </select>
     </div>
-    <div class="form-row"><label>カラー</label><input id="m-color" type="color" value="#6366f1" /></div>
+    <div class="form-row"><label>カラー</label><input id="m-color" type="color" value="#7c3aed" /></div>
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="saveMember()">保存</button>
       <button class="btn btn-ghost" onclick="closeMemberModal()">キャンセル</button>
@@ -387,6 +433,34 @@ body {
   </div>
 </div>
 
+<!-- 希望シフト入力モーダル -->
+<div class="modal-overlay hidden" id="desired-modal">
+  <div class="modal-box">
+    <h3>◎ 希望シフトを入力</h3>
+    <div class="dm-info">
+      <strong id="dm-member"></strong>
+      <span id="dm-date"></span>
+    </div>
+    <div class="time-row">
+      <div class="form-row">
+        <label>開始時間</label>
+        <input id="dm-start" type="time" step="900" />
+      </div>
+      <span class="time-sep">〜</span>
+      <div class="form-row">
+        <label>終了時間</label>
+        <input id="dm-end" type="time" step="900" />
+      </div>
+    </div>
+    <div class="form-row" style="margin-top:12px"><label>メモ（任意）</label><input id="dm-note" type="text" placeholder="備考など..." /></div>
+    <div class="modal-actions">
+      <button class="btn btn-gray" onclick="saveDesiredShift()">追加する</button>
+      <button class="btn btn-ghost" onclick="closeDesiredModal()">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- シフトポップアップ -->
 <div id="shift-popup">
   <h4 id="popup-name"></h4>
   <div class="popup-meta" id="popup-meta"></div>
@@ -405,10 +479,10 @@ body {
 const SUPABASE_URL = 'https://abpqnypoqxnphkdssibm.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFicHFueXBvcXhucGhrZHNzaWJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0NzQ4OTIsImV4cCI6MjA5NTA1MDg5Mn0.t3cHVWmwHOggCabSsFGNsontegRr4SOI5CZjyeflAYk';
 
-const GRADE_COLORS = { 4:'#a78bfa', 3:'#34d399', 2:'#60a5fa', 1:'#fb923c' };
+const GRADE_COLORS = { 4:'#7c3aed', 3:'#059669', 2:'#2563eb', 1:'#ea580c' };
 const GRADE_LABELS = { 4:'4年生', 3:'3年生', 2:'2年生', 1:'1年生' };
 const DAY_NAMES    = ['月','火','水','木','金','土','日'];
-const HOUR_W = 64, DAY_W = HOUR_W * 24, LABEL_W = 144;
+const HOUR_W = 64, DAY_W = HOUR_W * 24, LABEL_W = 148;
 
 // ── State ──────────────────────────────────────────────────────
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -416,6 +490,7 @@ let weekStart = getWeekStart(new Date());
 let members = [], shifts = [];
 let inputMode = 'confirmed';
 let activeShiftId = null, editingMemberId = null, channel = null;
+let desiredCtx = null; // { member, date }
 
 // ── Boot ───────────────────────────────────────────────────────
 setSyncStatus('connecting');
@@ -424,7 +499,7 @@ setupRealtime();
 setInterval(drawNowLines, 60000);
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closePopup(); closeMemberModal(); }
+  if (e.key === 'Escape') { closePopup(); closeMemberModal(); closeDesiredModal(); }
   if (!e.target.matches('input,select,textarea')) {
     if (e.key === 'ArrowLeft')  prevWeek();
     if (e.key === 'ArrowRight') nextWeek();
@@ -508,7 +583,7 @@ function buildTimeHeader(dates, todayStr) {
     const isToday = fmtDate(d) === todayStr;
     const isSat = i === 5, isSun = i === 6;
     const day = document.createElement('div');
-    day.className = 'th-day'+(isToday?' is-today':'')+(isSat?' is-weekend':'')+(isSun?' is-sunday':'');
+    day.className = 'th-day'+(isToday?' is-today':'')+(isSat?' is-sat':'')+(isSun?' is-sun':'');
     const lbl = document.createElement('div');
     lbl.className = 'th-day-label';
     lbl.innerHTML = `<span class="th-day-name">${DAY_NAMES[i]}</span><span class="th-day-date">${d.getMonth()+1}/${d.getDate()}</span>${isToday?'<span class="th-today-badge">TODAY</span>':''}`;
@@ -517,7 +592,7 @@ function buildTimeHeader(dates, todayStr) {
     hrs.className = 'th-hours';
     for (let h = 0; h < 24; h++) {
       const hel = document.createElement('div');
-      hel.className = 'th-hour' + (h === 0 ? ' h0' : '');
+      hel.className = 'th-hour'+(h===0?' h0':'');
       hel.textContent = h === 0 ? '0:00' : h;
       hrs.appendChild(hel);
     }
@@ -540,8 +615,7 @@ function buildGradeGroup(grade, gm, dates, todayStr) {
   const ln = document.createElement('div');
   ln.className = 'grade-line';
   glr.appendChild(ln);
-  gh.appendChild(gl);
-  gh.appendChild(glr);
+  gh.appendChild(gl); gh.appendChild(glr);
   grp.appendChild(gh);
   gm.forEach(m => grp.appendChild(buildMemberRow(m, shifts.filter(s => s.member_id === m.id), dates, todayStr)));
   return grp;
@@ -550,11 +624,15 @@ function buildGradeGroup(grade, gm, dates, todayStr) {
 function buildMemberRow(member, mShifts, dates, todayStr) {
   const row = document.createElement('div');
   row.className = 'member-row';
+
   const lbl = document.createElement('div');
   lbl.className = 'member-label';
   const av = document.createElement('div');
   av.className = 'avatar';
-  av.style.background = member.color || GRADE_COLORS[member.grade];
+  const mc = member.color || GRADE_COLORS[member.grade];
+  av.style.background = mc + '22';
+  av.style.color = mc;
+  av.style.border = `1.5px solid ${mc}44`;
   av.textContent = member.name.charAt(0);
   const nm = document.createElement('div');
   nm.className = 'member-name';
@@ -564,30 +642,32 @@ function buildMemberRow(member, mShifts, dates, todayStr) {
   row.appendChild(lbl);
 
   const grid = document.createElement('div');
-  grid.className = 'row-grid';
+  grid.className = 'row-grid mode-' + inputMode;
   dates.forEach((d, i) => {
-    const isToday = fmtDate(d) === todayStr;
-    const isWe = i >= 5;
     const col = document.createElement('div');
-    col.className = 'day-col'+(isToday?' is-today':'')+(isWe?' is-weekend':'');
-    for (let h = 0; h < 24; h++) { const c = document.createElement('div'); c.className = 'hour-cell'; col.appendChild(c); }
+    col.className = 'day-col'+(fmtDate(d)===todayStr?' is-today':'')+(i>=5?' is-weekend':'');
+    for (let h=0;h<24;h++) { const c=document.createElement('div'); c.className='hour-cell'; col.appendChild(c); }
     grid.appendChild(col);
   });
+
   mShifts.forEach(shift => {
     const di = dayIndex(shift.date);
     if (di >= 0 && di <= 6) grid.appendChild(buildShiftBar(shift, member, di));
   });
-  setupDrag(grid, member, dates);
+
+  setupInteraction(grid, member, dates);
   row.appendChild(grid);
   return row;
 }
 
 function buildShiftBar(shift, member, di) {
+  const isDesired = shift.type === 'desired';
   const bar = document.createElement('div');
-  bar.className = 'shift-bar' + (shift.type === 'desired' ? ' desired' : '');
-  bar.style.background = member.color || GRADE_COLORS[member.grade];
+  bar.className = 'shift-bar ' + (isDesired ? 'desired' : 'confirmed');
+  if (!isDesired) bar.style.background = member.color || GRADE_COLORS[member.grade];
   bar.style.left  = (di * DAY_W + (shift.start_minutes / 60) * HOUR_W) + 'px';
   bar.style.width = Math.max(((shift.end_minutes - shift.start_minutes) / 60) * HOUR_W, 6) + 'px';
+
   const t = document.createElement('span');
   t.className = 'shift-time';
   t.textContent = `${toTime(shift.start_minutes)}–${toTime(shift.end_minutes)}`;
@@ -595,15 +675,15 @@ function buildShiftBar(shift, member, di) {
   if (shift.note) {
     const n = document.createElement('span');
     n.textContent = ' ' + shift.note;
-    n.style.cssText = 'margin-left:4px;opacity:.75';
+    n.style.cssText = 'margin-left:4px;opacity:.8';
     bar.appendChild(n);
   }
   bar.addEventListener('click', e => { e.stopPropagation(); showShiftPopup(shift, member, e); });
   return bar;
 }
 
-// ── Drag ───────────────────────────────────────────────────────
-function setupDrag(grid, member, dates) {
+// ── Interaction (確定=drag / 希望=click→modal) ──────────────────
+function setupInteraction(grid, member, dates) {
   let preview = null, startInfo = null;
 
   function getInfo(cx) {
@@ -614,54 +694,67 @@ function setupDrag(grid, member, dates) {
     return { di, mins };
   }
 
+  // ── 確定：ドラッグ ──
   function startDrag(cx) {
     startInfo = getInfo(cx);
     preview = document.createElement('div');
     preview.className = 'drag-preview';
     preview.style.background = member.color || GRADE_COLORS[member.grade];
-    if (inputMode === 'desired') preview.style.opacity = '.5';
     grid.appendChild(preview);
     refreshPrev(startInfo.mins, startInfo.mins);
   }
-
   function moveDrag(cx) {
     if (!startInfo || !preview) return;
     refreshPrev(startInfo.mins, getInfo(cx).mins);
   }
-
   async function endDrag(cx) {
     if (!startInfo || !preview) { startInfo = null; return; }
-    const end = getInfo(cx).mins;
+    const endMins = getInfo(cx).mins;
     preview.remove(); preview = null;
-    const s = Math.min(startInfo.mins, end);
-    const e = Math.max(startInfo.mins, end);
+    const s = Math.min(startInfo.mins, endMins);
+    const e = Math.max(startInfo.mins, endMins);
     const di = startInfo.di;
     startInfo = null;
-    if (e - s >= 15) await createShift(member.id, dates[di], s, e);
+    if (e - s >= 15) await createShift(member.id, dates[di], s, e, 'confirmed');
   }
-
-  function refreshPrev(sMins, eMins) {
-    const s = Math.min(sMins, eMins), e = Math.max(sMins, eMins);
+  function refreshPrev(s0, e0) {
+    const s = Math.min(s0, e0), e = Math.max(s0, e0);
     preview.style.left  = (startInfo.di * DAY_W + (s / 60) * HOUR_W) + 'px';
     preview.style.width = Math.max(((e - s) / 60) * HOUR_W, 4) + 'px';
     preview.textContent = `${toTime(s)}–${toTime(e)}`;
   }
 
   grid.addEventListener('mousedown', e => {
+    if (inputMode !== 'confirmed') return;
     if (e.target.classList.contains('shift-bar') || e.button !== 0) return;
     e.preventDefault();
     startDrag(e.clientX);
     const mm = e2 => moveDrag(e2.clientX);
-    const mu = e2 => { endDrag(e2.clientX); document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); };
+    const mu = e2 => {
+      endDrag(e2.clientX);
+      document.removeEventListener('mousemove', mm);
+      document.removeEventListener('mouseup', mu);
+    };
     document.addEventListener('mousemove', mm);
     document.addEventListener('mouseup', mu);
   });
-  grid.addEventListener('touchstart', e => { if (!e.target.classList.contains('shift-bar')) startDrag(e.touches[0].clientX); }, { passive: true });
-  grid.addEventListener('touchmove',  e => moveDrag(e.touches[0].clientX), { passive: true });
-  grid.addEventListener('touchend',   e => endDrag(e.changedTouches[0].clientX));
+  grid.addEventListener('touchstart', e => {
+    if (inputMode !== 'confirmed' || e.target.classList.contains('shift-bar')) return;
+    startDrag(e.touches[0].clientX);
+  }, { passive: true });
+  grid.addEventListener('touchmove',  e => { if (inputMode === 'confirmed') moveDrag(e.touches[0].clientX); }, { passive: true });
+  grid.addEventListener('touchend',   e => { if (inputMode === 'confirmed') endDrag(e.changedTouches[0].clientX); });
+
+  // ── 希望：クリック→モーダル ──
+  grid.addEventListener('click', e => {
+    if (inputMode !== 'desired') return;
+    if (e.target.classList.contains('shift-bar')) return;
+    const { di, mins } = getInfo(e.clientX);
+    openDesiredModal(member, dates[di], mins);
+  });
 }
 
-// ── Now Line ───────────────────────────────────────────────────
+// ── Now Lines ──────────────────────────────────────────────────
 function drawNowLines() {
   document.querySelectorAll('.now-line').forEach(el => el.remove());
   const todayStr = fmtDate(new Date());
@@ -683,10 +776,8 @@ function renderDayNav() {
   nav.innerHTML = '';
   const todayStr = fmtDate(new Date());
   weekDates().forEach((d, i) => {
-    const isSat = i === 5, isSun = i === 6;
     const btn = document.createElement('button');
-    btn.className = 'dnav-btn'+(fmtDate(d)===todayStr?' is-today':'')+(isSat?' is-weekend':'')+(isSun?' is-sunday':'');
-    btn.dataset.i = i;
+    btn.className = 'dnav-btn'+(fmtDate(d)===todayStr?' is-today':'')+(i===5?' is-sat':'')+(i===6?' is-sun':'');
     btn.innerHTML = `<span class="dnav-name">${DAY_NAMES[i]}</span><span class="dnav-date">${d.getMonth()+1}/${d.getDate()}</span><span class="dnav-dot"></span>`;
     btn.addEventListener('click', () => scrollToDay(i));
     nav.appendChild(btn);
@@ -697,13 +788,11 @@ function renderDayNav() {
 function scrollToDay(i) {
   document.getElementById('gantt-wrapper').scrollTo({ left: i * DAY_W, behavior: 'smooth' });
 }
-
 function updateActiveDayTab() {
   const sl = document.getElementById('gantt-wrapper').scrollLeft;
   const ai = Math.min(6, Math.floor((sl + DAY_W * 0.3) / DAY_W));
   document.querySelectorAll('.dnav-btn').forEach((b, i) => b.classList.toggle('active', i === ai));
 }
-
 function updateWeekRange() {
   const d = weekDates();
   document.getElementById('week-range').textContent =
@@ -711,9 +800,9 @@ function updateWeekRange() {
 }
 
 // ── Week Nav ───────────────────────────────────────────────────
-function prevWeek()    { weekStart = new Date(weekStart); weekStart.setDate(weekStart.getDate()-7); loadData(); }
-function nextWeek()    { weekStart = new Date(weekStart); weekStart.setDate(weekStart.getDate()+7); loadData(); }
-function goThisWeek()  {
+function prevWeek()   { weekStart = new Date(weekStart); weekStart.setDate(weekStart.getDate()-7); loadData(); }
+function nextWeek()   { weekStart = new Date(weekStart); weekStart.setDate(weekStart.getDate()+7); loadData(); }
+function goThisWeek() {
   weekStart = getWeekStart(new Date()); loadData();
   setTimeout(() => { const now = new Date(); scrollToDay(now.getDay()===0?6:now.getDay()-1); }, 350);
 }
@@ -721,21 +810,56 @@ function goThisWeek()  {
 // ── Mode ───────────────────────────────────────────────────────
 function setMode(m) {
   inputMode = m;
-  const bc = document.getElementById('btn-confirmed');
-  const bd = document.getElementById('btn-desired');
-  bc.className = 'mode-btn' + (m==='confirmed' ? ' active m-confirmed' : ' m-confirmed');
-  bd.className = 'mode-btn' + (m==='desired'   ? ' active m-desired'   : ' m-desired');
+  document.getElementById('btn-confirmed').className = 'mode-btn'+(m==='confirmed'?' active m-confirmed':' m-confirmed');
+  document.getElementById('btn-desired').className   = 'mode-btn'+(m==='desired'  ?' active m-desired'  :' m-desired');
+  // グリッドのカーソルを更新
+  document.querySelectorAll('.row-grid').forEach(g => {
+    g.className = 'row-grid mode-' + m;
+  });
+}
+
+// ── 希望シフトモーダル ──────────────────────────────────────────
+function openDesiredModal(member, date, suggestedMins) {
+  desiredCtx = { member, date };
+  document.getElementById('dm-member').textContent = member.name;
+  const di = dayIndex(fmtDate(date));
+  document.getElementById('dm-date').textContent =
+    `${DAY_NAMES[di]}曜日  ${date.getMonth()+1}月${date.getDate()}日`;
+  const s = snap(suggestedMins);
+  const e = snap(Math.min(s + 120, 1440));
+  document.getElementById('dm-start').value = toTimeInput(s);
+  document.getElementById('dm-end').value   = toTimeInput(e);
+  document.getElementById('dm-note').value  = '';
+  document.getElementById('desired-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('dm-start').focus(), 100);
+}
+function closeDesiredModal() {
+  document.getElementById('desired-modal').classList.add('hidden');
+  desiredCtx = null;
+}
+async function saveDesiredShift() {
+  if (!desiredCtx) return;
+  const sv = document.getElementById('dm-start').value;
+  const ev = document.getElementById('dm-end').value;
+  const note = document.getElementById('dm-note').value.trim();
+  if (!sv || !ev) { showToast('時間を入力してください'); return; }
+  const startMins = timeToMins(sv);
+  const endMins   = timeToMins(ev);
+  if (endMins <= startMins) { showToast('終了時間は開始時間より後にしてください'); return; }
+  await createShift(desiredCtx.member.id, desiredCtx.date, startMins, endMins, 'desired', note);
+  closeDesiredModal();
 }
 
 // ── CRUD ───────────────────────────────────────────────────────
-async function createShift(memberId, date, startMin, endMin) {
+async function createShift(memberId, date, startMin, endMin, type = inputMode, note = '') {
   try {
     const { error } = await sb.from('shifts').insert({
       member_id: memberId, date: fmtDate(date),
-      start_minutes: startMin, end_minutes: endMin, note: '', type: inputMode
+      start_minutes: startMin, end_minutes: endMin,
+      note, type
     });
     if (error) throw error;
-    showToast(inputMode==='desired' ? '◎ 希望シフトを追加しました' : '✓ 確定シフトを追加しました');
+    showToast(type==='desired' ? '◎ 希望シフトを追加しました' : '✓ 確定シフトを追加しました');
   } catch(e) { showToast('エラー: ' + e.message); }
 }
 
@@ -780,29 +904,33 @@ async function deleteMember() {
   } catch(e) { showToast('エラー: ' + e.message); }
 }
 
-// ── UI ─────────────────────────────────────────────────────────
+// ── Shift Popup ────────────────────────────────────────────────
 function showShiftPopup(shift, member, e) {
   activeShiftId = shift.id;
   const di = dayIndex(shift.date);
   const d  = weekDates()[di];
-  document.getElementById('popup-name').textContent = member.name + (shift.type==='desired' ? '  【希望】' : '  【確定】');
-  document.getElementById('popup-meta').textContent = (d ? DAY_NAMES[di]+' '+((d.getMonth()+1)+'/'+d.getDate()) : '') + '  ' + toTime(shift.start_minutes) + '〜' + toTime(shift.end_minutes);
+  document.getElementById('popup-name').textContent =
+    member.name + (shift.type==='desired' ? '  ◎ 希望' : '  ✓ 確定');
+  document.getElementById('popup-meta').textContent =
+    (d ? DAY_NAMES[di]+' '+(d.getMonth()+1)+'/'+d.getDate() : '') +
+    '  ' + toTime(shift.start_minutes) + '〜' + toTime(shift.end_minutes);
   document.getElementById('popup-note').value = shift.note || '';
   const p = document.getElementById('shift-popup');
   p.classList.add('visible');
   let x = e.clientX+12, y = e.clientY+12;
   if (x+240 > window.innerWidth)  x = e.clientX-252;
-  if (y+190 > window.innerHeight) y = e.clientY-202;
+  if (y+200 > window.innerHeight) y = e.clientY-212;
   p.style.left = x+'px'; p.style.top = y+'px';
 }
 function closePopup() { document.getElementById('shift-popup').classList.remove('visible'); activeShiftId = null; }
 
+// ── Member Modal ───────────────────────────────────────────────
 function openAddMember() {
   editingMemberId = null;
   document.getElementById('member-modal-title').textContent = 'メンバーを追加';
-  document.getElementById('m-name').value = '';
+  document.getElementById('m-name').value  = '';
   document.getElementById('m-grade').value = '1';
-  document.getElementById('m-color').value = '#fb923c';
+  document.getElementById('m-color').value = '#ea580c';
   document.getElementById('delete-member-btn').style.display = 'none';
   document.getElementById('member-modal').classList.remove('hidden');
 }
@@ -831,37 +959,39 @@ function renderMemberPanel() {
     gm.forEach(m => {
       const card = document.createElement('div');
       card.className = 'mc';
-      card.innerHTML = `<div style="width:28px;height:28px;border-radius:50%;background:${m.color||GRADE_COLORS[m.grade]};display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;color:#0d1117;flex-shrink:0">${m.name.charAt(0)}</div><div class="mc-info"><div class="mc-name">${m.name}</div><div class="mc-grade">${GRADE_LABELS[m.grade]}</div></div><div class="small-btn" onclick='openEditMember(${JSON.stringify(m)})'>✎</div>`;
+      const mc = m.color || GRADE_COLORS[m.grade];
+      card.innerHTML = `<div style="width:28px;height:28px;border-radius:50%;background:${mc}22;border:1.5px solid ${mc}55;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;color:${mc};flex-shrink:0">${m.name.charAt(0)}</div><div class="mc-info"><div class="mc-name">${m.name}</div><div class="mc-grade">${GRADE_LABELS[m.grade]}</div></div><div class="small-btn" onclick='openEditMember(${JSON.stringify(m)})'>✎</div>`;
       list.appendChild(card);
     });
   });
 }
 
-function setSyncStatus(s) { document.getElementById('sync-dot').className = (s==='SUBSCRIBED'||s==='ok') ? 'ok' : s; }
+// ── Utils ──────────────────────────────────────────────────────
+function setSyncStatus(s) { document.getElementById('sync-dot').className = (s==='SUBSCRIBED'||s==='ok')?'ok':s; }
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2500);
 }
-
-// ── Utils ──────────────────────────────────────────────────────
 function getWeekStart(d) {
   const r = new Date(d); r.setHours(0,0,0,0);
   const day = r.getDay();
-  r.setDate(r.getDate() + (day === 0 ? -6 : 1 - day));
+  r.setDate(r.getDate() + (day===0?-6:1-day));
   return r;
 }
 function weekDates() {
-  return Array.from({length:7}, (_,i) => { const d = new Date(weekStart); d.setDate(d.getDate()+i); return d; });
+  return Array.from({length:7},(_,i)=>{ const d=new Date(weekStart); d.setDate(d.getDate()+i); return d; });
 }
 function dayIndex(dateStr) {
   const d = new Date(dateStr); d.setHours(0,0,0,0);
   const ws = new Date(weekStart); ws.setHours(0,0,0,0);
-  return Math.round((d - ws) / 86400000);
+  return Math.round((d-ws)/86400000);
 }
 function fmtDate(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
-function toTime(m)  { return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; }
-function snap(m)    { return Math.round(m / 15) * 15; }
+function toTime(m)      { return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; }
+function toTimeInput(m) { return toTime(m); }
+function timeToMins(s)  { const [h,m]=s.split(':').map(Number); return h*60+m; }
+function snap(m)        { return Math.round(m/15)*15; }
 </script>
 </body>
 </html>
