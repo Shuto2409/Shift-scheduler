@@ -330,6 +330,19 @@ body {
 .wd-day-label.sun { color: #cf222e; background: rgba(207,34,46,.06); }
 .wd-day-label.today { color: var(--accent); background: var(--accent-soft); border-color: rgba(124,58,237,.25); }
 .wd-day-date { text-align: center; font-size: .7rem; color: var(--text-muted); margin-top: -2px; }
+.wd-week-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 14px;
+}
+.wd-week-label {
+  font-size: .8rem; color: var(--text-muted); white-space: nowrap; font-weight: 500;
+}
+#wd-week-select {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; color: var(--text);
+  font-size: .85rem; font-weight: 600; cursor: pointer; outline: none;
+}
+#wd-week-select:focus { border-color: var(--accent); }
 .wd-date-select {
   width: 100%; background: var(--surface2); border: 1px solid var(--border);
   border-radius: 6px; padding: 4px 3px; color: var(--text);
@@ -434,6 +447,10 @@ body {
         <div class="wd-member-name" id="wd-member-name"></div>
         <div style="font-size:.78rem;color:var(--text-muted)">◎ 希望シフト入力</div>
       </div>
+    </div>
+    <div class="wd-week-row">
+      <span class="wd-week-label">週を選択</span>
+      <select id="wd-week-select" onchange="onWdWeekChange(this.value)"></select>
     </div>
     <div class="wd-hint">💡 入れる日の時間を入力してください。空欄の日はスキップされます。</div>
     <div class="wd-days-grid" id="wd-days-grid"></div>
@@ -757,71 +774,108 @@ function makeDateSelect(dayIdx, defaultDate) {
 }
 
 // ── Weekly Desired Modal ────────────────────────────────────────
+
+// モーダル用の週開始（topbarのweekStartとは独立）
+let wdWeekStart = null;
+
+function buildWdWeekDropdown(selectedWs) {
+  const sel = document.getElementById('wd-week-select');
+  sel.innerHTML = '';
+  const base     = getWeekStart(new Date());
+  const selStr   = fmtDate(selectedWs);
+  for (let offset = -4; offset <= 8; offset++) {
+    const ws = new Date(base); ws.setDate(ws.getDate() + offset * 7);
+    const we = new Date(ws);   we.setDate(we.getDate() + 6);
+    const val = fmtDate(ws);
+    const isThis = offset === 0;
+    const opt = document.createElement('option');
+    opt.value = val;
+    opt.textContent = `${ws.getMonth()+1}/${ws.getDate()}(月) 〜 ${we.getMonth()+1}/${we.getDate()}(日)` + (isThis ? ' ← 今週' : '');
+    if (val === selStr) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+function onWdWeekChange(val) {
+  const [y,m,d] = val.split('-').map(Number);
+  wdWeekStart = new Date(y, m-1, d);
+  rebuildWdGrid();
+}
+
+function rebuildWdGrid() {
+  const dates    = Array.from({length:7}, (_,i) => { const d=new Date(wdWeekStart); d.setDate(d.getDate()+i); return d; });
+  const todayStr = fmtDate(new Date());
+  const grid     = document.getElementById('wd-days-grid');
+  // 既存の時間入力値を保存
+  const saved = {};
+  grid.querySelectorAll('.wd-day-col').forEach((col, i) => {
+    saved[i] = {
+      start: col.querySelector('[data-type=start]')?.value || '',
+      end:   col.querySelector('[data-type=end]')?.value   || '',
+      note:  col.querySelector('[data-type=note]')?.value  || '',
+    };
+  });
+  grid.innerHTML = '';
+  dates.forEach((d, i) => buildWdDayCol(grid, d, i, todayStr, saved[i]));
+}
+
+function buildWdDayCol(grid, d, i, todayStr, savedTimes) {
+  const dateStr = fmtDate(d);
+  const isToday = dateStr === todayStr;
+  const isSat   = i === 5;
+  const isSun   = i === 6;
+  const col = el('div','wd-day-col');
+
+  const lbl = el('div','wd-day-label'+(isToday?' today':isSat?' sat':isSun?' sun':''));
+  lbl.textContent = DAY_NAMES[i];
+  col.appendChild(lbl);
+
+  const ds = makeDateSelect(i, d);
+  col.appendChild(ds);
+
+  const si = document.createElement('input');
+  si.type='time'; si.step='600'; si.className='wd-time-input';
+  si.dataset.day=i; si.dataset.type='start';
+  if (savedTimes?.start) si.value = savedTimes.start;
+  col.appendChild(si);
+
+  const sep = el('div','wd-time-sep'); sep.textContent = '〜';
+  col.appendChild(sep);
+
+  const ei = document.createElement('input');
+  ei.type='time'; ei.step='600'; ei.className='wd-time-input';
+  ei.dataset.day=i; ei.dataset.type='end';
+  if (savedTimes?.end) ei.value = savedTimes.end;
+  col.appendChild(ei);
+
+  const ni = document.createElement('input');
+  ni.type='text'; ni.className='wd-note-input';
+  ni.dataset.day=i; ni.dataset.type='note';
+  ni.placeholder='メモ';
+  if (savedTimes?.note) ni.value = savedTimes.note;
+  col.appendChild(ni);
+  const nl = el('div','wd-note-label'); nl.textContent='メモ(任意)';
+  col.appendChild(nl);
+
+  const clr = el('div','wd-clear-btn'); clr.textContent='クリア';
+  clr.addEventListener('click', () => { si.value=''; ei.value=''; ni.value=''; });
+  col.appendChild(clr);
+
+  grid.appendChild(col);
+}
+
 function openWeeklyDesiredModal(member) {
   wdMember = member;
+  wdWeekStart = new Date(weekStart); // topbarの週に合わせる
   const mc = member.color || GRADE_COLORS[member.grade];
   const av = document.getElementById('wd-avatar');
   av.style.cssText = `width:32px;height:32px;border-radius:50%;background:${mc}22;color:${mc};border:1.5px solid ${mc}55;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;flex-shrink:0`;
   av.textContent = member.name.charAt(0);
   document.getElementById('wd-member-name').textContent = member.name;
 
-  const dates    = weekDates();
-  const todayStr = fmtDate(new Date());
-  const grid     = document.getElementById('wd-days-grid');
-  grid.innerHTML = '';
+  buildWdWeekDropdown(wdWeekStart);
 
-  dates.forEach((d, i) => {
-    const dateStr  = fmtDate(d);
-    const isToday  = dateStr === todayStr;
-    const isSat    = i === 5;
-    const isSun    = i === 6;
-
-    const col = el('div','wd-day-col');
-
-    // Day label (static)
-    const lbl = el('div','wd-day-label'+(isToday?' today':isSat?' sat':isSun?' sun':''));
-    lbl.textContent = DAY_NAMES[i];
-    col.appendChild(lbl);
-
-    // Date dropdown
-    const ds = makeDateSelect(i, d);
-    col.appendChild(ds);
-
-    // Start time input
-    const si = document.createElement('input');
-    si.type='time'; si.step='600';
-    si.className='wd-time-input';
-    si.dataset.day=i; si.dataset.type='start';
-    col.appendChild(si);
-
-    // Sep
-    const sep = el('div','wd-time-sep'); sep.textContent = '〜';
-    col.appendChild(sep);
-
-    // End time input
-    const ei = document.createElement('input');
-    ei.type='time'; ei.step='600';
-    ei.className='wd-time-input';
-    ei.dataset.day=i; ei.dataset.type='end';
-    col.appendChild(ei);
-
-    // Note
-    const ni = document.createElement('input');
-    ni.type='text'; ni.className='wd-note-input';
-    ni.dataset.day=i; ni.dataset.type='note';
-    ni.placeholder='メモ';
-    col.appendChild(ni);
-    const nl = el('div','wd-note-label'); nl.textContent='メモ(任意)';
-    col.appendChild(nl);
-
-    // Clear
-    const clr = el('div','wd-clear-btn');
-    clr.textContent = 'クリア';
-    clr.addEventListener('click', () => { si.value=''; ei.value=''; ni.value=''; });
-    col.appendChild(clr);
-
-    grid.appendChild(col);
-  });
+  rebuildWdGrid();
 
   document.getElementById('weekly-desired-modal').classList.remove('hidden');
 }
