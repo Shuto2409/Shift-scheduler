@@ -334,8 +334,10 @@ body {
   width: 100%; background: var(--surface2); border: 1px solid var(--border);
   border-radius: 6px; padding: 5px 4px; color: var(--text);
   font-size: .8rem; text-align: center; outline: none;
+  appearance: none; -webkit-appearance: none; cursor: pointer;
 }
 .wd-time-input:focus { border-color: var(--accent); background: var(--surface); }
+.wd-time-input option { font-size: .82rem; }
 .wd-time-sep { text-align: center; font-size: .72rem; color: var(--text-muted); }
 .wd-note-input {
   width: 100%; background: var(--surface2); border: 1px solid var(--border);
@@ -517,7 +519,15 @@ function onShiftChange(p) {
   const dates = weekDates();
   const s0 = fmtDate(dates[0]), e0 = fmtDate(dates[6]);
   if (p.eventType==='INSERT') {
-    if (p.new.date >= s0 && p.new.date <= e0) { shifts.push(p.new); renderGantt(); }
+    if (p.new.date < s0 || p.new.date > e0) return;
+    // 楽観的に追加したtempと同一シフトなら差し替え、なければ追加
+    const tempIdx = shifts.findIndex(s =>
+      String(s.id).startsWith('temp_') &&
+      s.member_id === p.new.member_id && s.date === p.new.date &&
+      s.start_minutes === p.new.start_minutes && s.end_minutes === p.new.end_minutes
+    );
+    if (tempIdx >= 0) { shifts[tempIdx] = p.new; renderGantt(); }
+    else if (!shifts.find(s => s.id === p.new.id)) { shifts.push(p.new); renderGantt(); }
   } else if (p.eventType==='UPDATE') {
     const i = shifts.findIndex(s => s.id === p.new.id);
     if (i>=0) shifts[i]=p.new; else if (p.new.date>=s0&&p.new.date<=e0) shifts.push(p.new);
@@ -721,6 +731,25 @@ function setupDragInteraction(cell, member, date) {
   }
 }
 
+// ── Time select helper ─────────────────────────────────────────
+function makeTimeSelect(dayIdx, type) {
+  const sel = document.createElement('select');
+  sel.className = 'wd-time-input';
+  sel.dataset.day  = dayIdx;
+  sel.dataset.type = type;
+  // 空の先頭オプション
+  const empty = document.createElement('option');
+  empty.value = ''; empty.textContent = type==='start' ? '開始時間' : '終了時間';
+  sel.appendChild(empty);
+  // 00:00 〜 23:50 を10分刻み
+  for (let m=0; m<1440; m+=10) {
+    const opt = document.createElement('option');
+    opt.value = toTime(m); opt.textContent = toTime(m);
+    sel.appendChild(opt);
+  }
+  return sel;
+}
+
 // ── Weekly Desired Modal ────────────────────────────────────────
 function openWeeklyDesiredModal(member) {
   wdMember = member;
@@ -753,24 +782,16 @@ function openWeeklyDesiredModal(member) {
     dt.textContent = `${d.getMonth()+1}/${d.getDate()}`;
     col.appendChild(dt);
 
-    // Start input
-    const si = document.createElement('input');
-    si.type='time'; si.step='600';
-    si.className='wd-time-input';
-    si.dataset.day=i; si.dataset.type='start';
-    si.placeholder='開始';
+    // Start select
+    const si = makeTimeSelect(i, 'start');
     col.appendChild(si);
 
     // Sep
     const sep = el('div','wd-time-sep'); sep.textContent = '〜';
     col.appendChild(sep);
 
-    // End input
-    const ei = document.createElement('input');
-    ei.type='time'; ei.step='600';
-    ei.className='wd-time-input';
-    ei.dataset.day=i; ei.dataset.type='end';
-    ei.placeholder='終了';
+    // End select
+    const ei = makeTimeSelect(i, 'end');
     col.appendChild(ei);
 
     // Note
@@ -785,7 +806,7 @@ function openWeeklyDesiredModal(member) {
     // Clear
     const clr = el('div','wd-clear-btn');
     clr.textContent = 'クリア';
-    clr.addEventListener('click', () => { si.value=''; ei.value=''; ni.value=''; });
+    clr.addEventListener('click', () => { si.value=''; ei.value=''; ni.value=''; si.selectedIndex=0; ei.selectedIndex=0; });
     col.appendChild(clr);
 
     grid.appendChild(col);
@@ -912,13 +933,26 @@ function setMode(m) {
 
 // ── CRUD ──────────────────────────────────────────────────────────
 async function createShift(memberId, date, startMin, endMin, type='confirmed', note='') {
+  // 楽観的即時追加 → 画面をすぐ更新
+  const tempId   = 'temp_' + Date.now();
+  const tempShift = { id:tempId, member_id:memberId, date:fmtDate(date),
+                      start_minutes:startMin, end_minutes:endMin, note, type };
+  shifts.push(tempShift);
+  renderGantt();
+
   try {
     const {error} = await sb.from('shifts').insert({
       member_id:memberId, date:fmtDate(date), start_minutes:startMin, end_minutes:endMin, note, type
     });
     if (error) throw error;
+    // temp を本物のIDに差し替えはリアルタイムINSERTイベントで行う
     showToast(type==='desired'?'◎ 希望シフトを追加しました':'✓ 確定シフトを追加しました');
-  } catch(e) { showToast('エラー: '+e.message); }
+  } catch(e) {
+    // 失敗したらロールバック
+    shifts = shifts.filter(s => s.id !== tempId);
+    renderGantt();
+    showToast('エラー: '+e.message);
+  }
 }
 
 async function deleteShift() {
