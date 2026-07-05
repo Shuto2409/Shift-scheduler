@@ -330,14 +330,18 @@ body {
 .wd-day-label.sun { color: #cf222e; background: rgba(207,34,46,.06); }
 .wd-day-label.today { color: var(--accent); background: var(--accent-soft); border-color: rgba(124,58,237,.25); }
 .wd-day-date { text-align: center; font-size: .7rem; color: var(--text-muted); margin-top: -2px; }
+.wd-date-select {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 3px; color: var(--text);
+  font-size: .75rem; text-align: center; outline: none; cursor: pointer;
+}
+.wd-date-select:focus { border-color: var(--accent); background: var(--surface); }
 .wd-time-input {
   width: 100%; background: var(--surface2); border: 1px solid var(--border);
   border-radius: 6px; padding: 5px 4px; color: var(--text);
   font-size: .8rem; text-align: center; outline: none;
-  appearance: none; -webkit-appearance: none; cursor: pointer;
 }
 .wd-time-input:focus { border-color: var(--accent); background: var(--surface); }
-.wd-time-input option { font-size: .82rem; }
 .wd-time-sep { text-align: center; font-size: .72rem; color: var(--text-muted); }
 .wd-note-input {
   width: 100%; background: var(--surface2); border: 1px solid var(--border);
@@ -731,20 +735,22 @@ function setupDragInteraction(cell, member, date) {
   }
 }
 
-// ── Time select helper ─────────────────────────────────────────
-function makeTimeSelect(dayIdx, type) {
+// ── Date select helper (モーダル用) ────────────────────────────
+function makeDateSelect(dayIdx, defaultDate) {
   const sel = document.createElement('select');
-  sel.className = 'wd-time-input';
+  sel.className = 'wd-date-select';
   sel.dataset.day  = dayIdx;
-  sel.dataset.type = type;
-  // 空の先頭オプション
-  const empty = document.createElement('option');
-  empty.value = ''; empty.textContent = type==='start' ? '開始時間' : '終了時間';
-  sel.appendChild(empty);
-  // 00:00 〜 23:50 を10分刻み
-  for (let m=0; m<1440; m+=10) {
+  sel.dataset.type = 'date';
+  // 前後3週分の全日付を出す（14日前〜21日後）
+  const base = new Date(); base.setHours(0,0,0,0);
+  for (let offset = -14; offset <= 21; offset++) {
+    const d = new Date(base); d.setDate(base.getDate() + offset);
+    const val = fmtDate(d);
+    const dayName = DAY_NAMES[d.getDay()===0?6:d.getDay()-1];
     const opt = document.createElement('option');
-    opt.value = toTime(m); opt.textContent = toTime(m);
+    opt.value = val;
+    opt.textContent = `${d.getMonth()+1}/${d.getDate()}(${dayName})`;
+    if (val === fmtDate(defaultDate)) opt.selected = true;
     sel.appendChild(opt);
   }
   return sel;
@@ -772,26 +778,31 @@ function openWeeklyDesiredModal(member) {
 
     const col = el('div','wd-day-col');
 
-    // Day label
+    // Day label (static)
     const lbl = el('div','wd-day-label'+(isToday?' today':isSat?' sat':isSun?' sun':''));
     lbl.textContent = DAY_NAMES[i];
     col.appendChild(lbl);
 
-    // Date
-    const dt = el('div','wd-day-date');
-    dt.textContent = `${d.getMonth()+1}/${d.getDate()}`;
-    col.appendChild(dt);
+    // Date dropdown
+    const ds = makeDateSelect(i, d);
+    col.appendChild(ds);
 
-    // Start select
-    const si = makeTimeSelect(i, 'start');
+    // Start time input
+    const si = document.createElement('input');
+    si.type='time'; si.step='600';
+    si.className='wd-time-input';
+    si.dataset.day=i; si.dataset.type='start';
     col.appendChild(si);
 
     // Sep
     const sep = el('div','wd-time-sep'); sep.textContent = '〜';
     col.appendChild(sep);
 
-    // End select
-    const ei = makeTimeSelect(i, 'end');
+    // End time input
+    const ei = document.createElement('input');
+    ei.type='time'; ei.step='600';
+    ei.className='wd-time-input';
+    ei.dataset.day=i; ei.dataset.type='end';
     col.appendChild(ei);
 
     // Note
@@ -806,7 +817,7 @@ function openWeeklyDesiredModal(member) {
     // Clear
     const clr = el('div','wd-clear-btn');
     clr.textContent = 'クリア';
-    clr.addEventListener('click', () => { si.value=''; ei.value=''; ni.value=''; si.selectedIndex=0; ei.selectedIndex=0; });
+    clr.addEventListener('click', () => { si.value=''; ei.value=''; ni.value=''; });
     col.appendChild(clr);
 
     grid.appendChild(col);
@@ -826,13 +837,14 @@ async function saveWeeklyDesired() {
   const inserts = [];
 
   inputs.forEach((col, i) => {
+    const dateVal = col.querySelector('[data-type=date]').value;
     const sv = col.querySelector('[data-type=start]').value;
     const ev = col.querySelector('[data-type=end]').value;
     const nv = col.querySelector('[data-type=note]').value.trim();
-    if (!sv || !ev) return;
+    if (!sv || !ev || !dateVal) return;
     const sMin = timeToMins(sv), eMin = timeToMins(ev);
     if (eMin <= sMin) return;
-    inserts.push({ member_id: wdMember.id, date: fmtDate(dates[i]), start_minutes: sMin, end_minutes: eMin, note: nv, type: 'desired' });
+    inserts.push({ member_id: wdMember.id, date: dateVal, start_minutes: sMin, end_minutes: eMin, note: nv, type: 'desired' });
   });
 
   if (!inserts.length) { showToast('時間が入力されていません'); return; }
